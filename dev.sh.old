@@ -1,0 +1,1 @@
+pkill -f next 2>/dev/null; pkill -f node 2>/dev/null; fuser -k 3000/tcp 2>/dev/null; npm run dev

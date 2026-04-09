@@ -1,0 +1,79 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Tenant {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  stores      Store[]
+  users       User[]
+
+  @@map("tenants")
+}
+
+model Store {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  slug        String
+  city        String?
+  state       String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  users       User[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@map("stores")
+}
+
+model User {
+  id          String   @id @default(cuid())
+  tenantId    String
+  storeId     String?
+  name        String
+  email       String   @unique
+  password    String
+  role        String
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  store       Store?   @relation(fields: [storeId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([storeId])
+  @@map("users")
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  price       Float
+  storeId     String
+  createdAt   DateTime @default(now())
+  available   Boolean  @default(true)
+  category    String
+  description String?
+  image       String?
+}
+
+model Order {
+  id        String   @id @default(cuid())
+  total     Float
+  createdAt DateTime @default(now())
+}

@@ -1,0 +1,500 @@
+[
+  {
+    "id": 1775689476095,
+    "orderId": "VZ-1775689476095",
+    "orderCode": "VZ-1775689476095",
+    "customerName": "Wellington Da Silva Souza",
+    "phone": "11947862099",
+    "address": "Rua Jose Vila Busquets",
+    "notes": "",
+    "items": [
+      {
+        "id": 1,
+        "name": "Frango BBQ",
+        "quantity": 1,
+        "price_cents": 5590,
+        "image": "x",
+        "addons": []
+      },
+      {
+        "id": 2,
+        "name": "Frango BBQ (G) - Borda Catupiry",
+        "quantity": 1,
+        "price_cents": 9026,
+        "image": "x",
+        "addons": [
+          "Azeitona"
+        ]
+      }
+    ],
+    "subtotal": 146.16,
+    "subtotal_cents": 14616,
+    "deliveryFee": 5,
+    "freight_cents": 500,
+    "total": 151.16,
+    "total_cents": 15116,
+    "paymentMethod": "pix",
+    "status": "novo",
+    "createdAt": "2026-04-08T23:04:36.095Z"
+  },
+  {
+    "id": 1775689437659,
+    "orderId": "VZ-1775689437659",
+    "orderCode": "VZ-1775689437659",
+    "customerName": "Wellington Da Silva Souza",
+    "phone": "11947862099",
+    "address": "Rua Jose Vila Busquets",
+    "notes": "",
+    "items": [
+      {
+        "id": 2,
+        "name": "Frango BBQ",
+        "quantity": 1,
+        "price_cents": 5590,
+        "image": "https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=800&auto=format&fit=crop",
+        "note": "",
+        "addons": [],
+        "size": "",
+        "crust": ""
+      },
+      {
+        "id": 1775689055786.972,
+        "name": "Frango BBQ (G) - Borda Catupiry",
+        "quantity": 1,
+        "price_cents": 9026,
+        "image": "https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=800&auto=format&fit=crop",
+        "note": "",
+        "addons": [
+          "Azeitona"
+        ],
+        "size": "",
+        "crust": ""
+      }
+    ],
+    "subtotal": 146.16,
+    "subtotal_cents": 14616,
+    "deliveryFee": 5,
+    "freight_cents": 500,
+    "total": 151.16,
+    "total_cents": 15116,
+    "paymentMethod": "pix",
+    "status": "novo",
+    "createdAt": "2026-04-08T23:03:57.659Z"
+  },
+  {
+    "orderId": "VZ-0017",
+    "customerName": "Wellington",
+    "phone": "11947862099",
+    "address": "Rua Jose Vila",
+    "notes": "teste",
+    "items": [
+      {
+        "id": 2,
+        "name": "Frango BBQ",
+        "price": 55.9,
+        "quantity": 1,
+        "image": "https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=800&auto=format&fit=crop",
+        "note": "",
+        "addons": [],
+        "size": "",
+        "crust": ""
+      },
+      {
+        "id": 1775669451571.6213,
+        "name": "Frango BBQ (M) - Borda Chocolate",
+        "price": 80.08,
+        "quantity": 1,
+        "image": "https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=800&auto=format&fit=crop",
+        "note": "",
+        "addons": [
+          "Cebola roxa"
+        ],
+        "size": "",
+        "crust": ""
+      }
+    ],
+    "subtotal": 135.98,
+    "deliveryFee": 5,
+    "total": 140.98,
+    "paymentMethod": "pix",
+    "status": "novo",
+    "createdAt": "2026-04-08T17:31:18.845Z",
+    "updatedAt": "2026-04-08T17:31:18.845Z"
+  },
+  {
+    "orderId": "VZ-0016",
+    "customerName": "teste",
+    "phone": "11947862099",
+    "address": "resfs",
+    "notes": "",
+    "items": [
+      {
+        "id": 1,
+        "name": "Atum",
+        "price": 54,
+        "quantity": 3,
+        "image": "https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=800&auto=format&fit=crop",
+        "note": "",
+        "addons": [],
+        "size": "",
+        "crust": ""
+      }
+    ],
+    "subtotal": 162,
+    "deliveryFee": 5,
+    "total": 167,
+    "paymentMethod": "pix",
+    "status": "novo",
+    "createdAt": "2026-04-08T16:28:52.925Z",
+    "updatedAt": "2026-04-08T16:28:52.925Z"
+  },
+  {
+    "orderId": "VZ-0015",
+    "customerName": "JOSE DAS OSTRA",
+    "phone": "119478620999",
+    "address": "RUA DO ORATORIO",
+    "notes": "",
+    "items": [
+      {
+        "id": 6,
+        "name": "Quatro Queijos",
+        "price": "R$ 49,40",
+        "image": "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?q=80&w=800&auto=format&fit=crop",
+        "quantity": 1
+      }
+    ],
+    "subtotal": 49.4,
+    "deliveryFee": 5,
+    "total": 54.4,
+    "paymentMethod": "pix",
+    "status": "novo",
+    "createdAt": "2026-04-07T22:26:00.510Z",
+    "updatedAt": "2026-04-07T22:26:00.510Z"
+  },
+  {
+    "orderId": "VZ-0014",
+    "customerName": "jOSUE",
+    "phone": "11947862099",
+    "address": "RUA DO CARRALHO",
+    "notes": "",
+    "items": [
+      {
+        "id": 2,
+        "name": "Frango BBQ",
+        "price": "R$ 55,90",
+        "image": "https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=800&auto=format&fit=crop",
+        "quantity": 3
+      }
+    ],
+    "subtotal": 167.7,
+    "deliveryFee": 5,
+    "total": 172.7,
+    "paymentMethod": "pix",
+    "status": "novo",
+    "createdAt": "2026-04-07T22:08:50.414Z",
+    "updatedAt": "2026-04-07T22:08:50.414Z"
+  },
+  {
+    "orderId": "VZ-0013",
+    "customerName": "TESTE",
+    "phone": "11947862099",
+    "address": "RUA JOSE VILA BUSQUETS",
+    "notes": "",
+    "items": [
+      {
+        "id": 2,
+        "name": "Frango BBQ",
+        "price": "R$ 55,90",
+        "image": "https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=800&auto=format&fit=crop",
+        "quantity": 2
+      }
+    ],
+    "subtotal": 111.8,
+    "deliveryFee": 5,
+    "total": 116.8,
+    "paymentMethod": "pix",
+    "status": "novo",
+    "createdAt": "2026-04-07T22:01:20.751Z",
+    "updatedAt": "2026-04-07T22:01:20.751Z"
+  },
+  {
+    "orderId": "VZ-0012",
+    "customerName": "JOSE TESTE",
+    "phone": "11947862099",
+    "address": "RUA JOSE VILA",
+    "notes": "",
+    "items": [
+      {
+        "id": 3,
+        "name": "Margherita Basil",
+        "price": "R$ 39,90",
+        "image": "https://images.unsplash.com/photo-1604382355076-af4b0eb60143?q=80&w=800&auto=format&fit=crop",
+        "quantity": 1
+      }
+    ],
+    "subtotal": 39.9,
+    "deliveryFee": 5,
+    "total": 44.9,
+    "paymentMethod": "pix",
+    "status": "novo",
+    "createdAt": "2026-04-07T21:50:55.541Z",
+    "updatedAt": "2026-04-07T21:50:55.541Z"
+  },
+  {
+    "orderId": "VZ-0011",
+    "customerName": "Wellington",
+    "phone": "11947862099",
+    "address": "jose",
+    "notes": "",
+    "items": [
+      {
+        "id": 1,
+        "name": "Atum",
+        "price": "R$ 54,00",
+        "image": "https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=800&auto=format&fit=crop",
+        "quantity": 1
+      }
+    ],
+    "subtotal": 54,
+    "deliveryFee": 5,
+    "total": 59,
+    "paymentMethod": "pix",
+    "status": "novo",
+    "createdAt": "2026-04-07T21:44:55.389Z",
+    "updatedAt": "2026-04-07T21:44:55.389Z"
+  },
+  {
+    "orderId": "VZ-0010",
+    "customerName": "Wellington",
+    "phone": "11947862099",
+    "address": "Rua Jose Vila",
+    "notes": "",
+    "items": [
+      {
+        "id": 6,
+        "name": "Quatro Queijos",
+        "price": "R$ 49,40",
+        "image": "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?q=80&w=800&auto=format&fit=crop",
+        "quantity": 1
+      }
+    ],
+    "subtotal": 49.4,
+    "deliveryFee": 5,
+    "total": 54.4,
+    "paymentMethod": "pix",
+    "status": "novo",
+    "createdAt": "2026-04-07T21:33:47.358Z",
+    "updatedAt": "2026-04-07T21:33:47.358Z"
+  },
+  {
+    "orderId": "VZ-0009",
+    "customerName": "JOSE BANGUELO",
+    "phone": "11947862099",
+    "address": "RUA DO BAGUIO",
+    "notes": "",
+    "items": [
+      {
+        "id": 1,
+        "name": "Atum",
+        "price": "R$ 54,00",
+        "image": "https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=800&auto=format&fit=crop",
+        "quantity": 1
+      }
+    ],
+    "subtotal": 54,
+    "deliveryFee": 5,
+    "total": 59,
+    "paymentMethod": "pix",
+    "status": "novo",
+    "createdAt": "2026-04-07T21:06:55.755Z",
+    "updatedAt": "2026-04-07T21:06:55.755Z"
+  },
+  {
+    "orderId": "VZ-0008",
+    "customerName": "teste",
+    "phone": "11947862099",
+    "address": "rua gozoland",
+    "notes": "",
+    "items": [
+      {
+        "id": 3,
+        "name": "Margherita Basil",
+        "price": "R$ 39,90",
+        "image": "https://images.unsplash.com/photo-1604382355076-af4b0eb60143?q=80&w=800&auto=format&fit=crop",
+        "quantity": 4
+      }
+    ],
+    "subtotal": 159.6,
+    "deliveryFee": 5,
+    "total": 164.6,
+    "paymentMethod": "pix",
+    "status": "novo",
+    "createdAt": "2026-04-07T20:55:18.654Z",
+    "updatedAt": "2026-04-07T20:55:18.655Z"
+  },
+  {
+    "orderId": "VZ-0007",
+    "customerName": "Cruzes",
+    "phone": "11947862099",
+    "address": "Gozolandia",
+    "notes": "",
+    "items": [
+      {
+        "id": 2,
+        "name": "Frango BBQ",
+        "price": "R$ 55,90",
+        "image": "https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=800&auto=format&fit=crop",
+        "quantity": 1
+      }
+    ],
+    "subtotal": 55.9,
+    "deliveryFee": 5,
+    "total": 60.9,
+    "paymentMethod": "pix",
+    "status": "novo",
+    "createdAt": "2026-04-07T20:52:12.821Z",
+    "updatedAt": "2026-04-07T20:52:12.821Z"
+  },
+  {
+    "orderId": "VZ-0006",
+    "customerName": "JOSEFA",
+    "phone": "11947862099",
+    "address": "RUA",
+    "notes": "",
+    "items": [
+      {
+        "id": 4,
+        "name": "Pepperoni Clássica",
+        "price": "R$ 49,90",
+        "image": "https://images.unsplash.com/photo-1628840042765-356cda07504e?q=80&w=800&auto=format&fit=crop",
+        "quantity": 1
+      }
+    ],
+    "subtotal": 49.9,
+    "deliveryFee": 5,
+    "total": 54.9,
+    "paymentMethod": "pix",
+    "status": "novo",
+    "createdAt": "2026-04-07T20:29:14.255Z",
+    "updatedAt": "2026-04-07T20:29:14.255Z"
+  },
+  {
+    "orderId": "VZ-0005",
+    "customerName": "Ziica",
+    "phone": "11947862099",
+    "address": "Rua jose",
+    "notes": "",
+    "items": [
+      {
+        "id": 1,
+        "name": "Atum",
+        "price": "R$ 54,00",
+        "image": "https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=800&auto=format&fit=crop",
+        "quantity": 1
+      }
+    ],
+    "subtotal": 54,
+    "deliveryFee": 5,
+    "total": 59,
+    "paymentMethod": "pix",
+    "status": "novo",
+    "createdAt": "2026-04-07T20:19:02.008Z",
+    "updatedAt": "2026-04-07T20:19:02.008Z"
+  },
+  {
+    "orderId": "VZ-0004",
+    "customerName": "Teresa",
+    "phone": "11947862099",
+    "address": "Rua José vila busquets",
+    "notes": "",
+    "items": [
+      {
+        "id": 1,
+        "name": "Atum",
+        "price": "R$ 54,00",
+        "image": "https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=800&auto=format&fit=crop",
+        "quantity": 1
+      }
+    ],
+    "subtotal": 54,
+    "deliveryFee": 5,
+    "total": 59,
+    "paymentMethod": "pix",
+    "status": "novo",
+    "createdAt": "2026-04-07T19:55:18.063Z",
+    "updatedAt": "2026-04-07T19:55:18.063Z"
+  },
+  {
+    "orderId": "VZ-0003",
+    "customerName": "Wellington",
+    "phone": "11947862099",
+    "address": "Rua José Vila busquets",
+    "notes": "",
+    "items": [
+      {
+        "id": 2331,
+        "name": "Frango BBQ (G) - Borda Chocolate",
+        "price": "R$ 92,26",
+        "image": "https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=800&auto=format&fit=crop",
+        "note": "",
+        "addons": [
+          "Azeitona"
+        ],
+        "quantity": 3
+      }
+    ],
+    "subtotal": 276.78000000000003,
+    "deliveryFee": 5,
+    "total": 281.78000000000003,
+    "paymentMethod": "pix",
+    "status": "novo",
+    "createdAt": "2026-04-07T19:53:45.693Z",
+    "updatedAt": "2026-04-07T19:53:45.693Z"
+  },
+  {
+    "orderId": "VZ-0002",
+    "customerName": "jose",
+    "phone": "11947862099",
+    "address": "Rua José Vila busquets",
+    "notes": "",
+    "items": [
+      {
+        "id": 1,
+        "name": "Atum",
+        "price": "R$ 54,00",
+        "image": "https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=800&auto=format&fit=crop",
+        "quantity": 1
+      }
+    ],
+    "subtotal": 54,
+    "deliveryFee": 5,
+    "total": 59,
+    "paymentMethod": "pix",
+    "status": "novo",
+    "createdAt": "2026-04-07T19:40:02.385Z",
+    "updatedAt": "2026-04-07T19:40:02.385Z"
+  },
+  {
+    "orderId": "VZ-0001",
+    "customerName": "Kuj",
+    "phone": "11947862099",
+    "address": "Rua jose",
+    "notes": "",
+    "items": [
+      {
+        "id": 2,
+        "name": "Frango BBQ",
+        "price": "R$ 55,90",
+        "image": "https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=800&auto=format&fit=crop",
+        "quantity": 3
+      }
+    ],
+    "subtotal": 167.7,
+    "deliveryFee": 5,
+    "total": 172.7,
+    "paymentMethod": "pix",
+    "status": "novo",
+    "createdAt": "2026-04-07T17:30:15.990Z",
+    "updatedAt": "2026-04-07T17:30:15.990Z"
+  }
+]
