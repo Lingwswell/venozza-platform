@@ -1,0 +1,117 @@
+import type { CartItem } from "@/types/order";
+
+const CART_KEY = "venozza_cart";
+
+function isBrowser() {
+  return typeof window !== "undefined";
+}
+
+function normalizeCartItem(item: Partial<CartItem>): CartItem {
+  return {
+    id: Number(item.id || 0),
+    name: String(item.name || ""),
+    price: Number(item.price || 0),
+    quantity: Number(item.quantity || 1),
+    image: item.image ? String(item.image) : "",
+    note: item.note ? String(item.note) : "",
+    addons: Array.isArray(item.addons) ? item.addons.map(String) : [],
+    size: item.size ? String(item.size) : "",
+    crust: item.crust ? String(item.crust) : "",
+  };
+}
+
+function readCart(): CartItem[] {
+  if (!isBrowser()) return [];
+
+  try {
+    const raw = localStorage.getItem(CART_KEY);
+    if (!raw) return [];
+
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .map((item) => normalizeCartItem(item))
+      .filter(
+        (item) =>
+          Number.isFinite(item.id) &&
+          item.id > 0 &&
+          item.name.trim().length > 0 &&
+          Number.isFinite(item.price) &&
+          item.price >= 0 &&
+          Number.isFinite(item.quantity) &&
+          item.quantity > 0
+      );
+  } catch {
+    return [];
+  }
+}
+
+function writeCart(items: CartItem[]) {
+  if (!isBrowser()) return;
+  localStorage.setItem(CART_KEY, JSON.stringify(items));
+}
+
+export function getCartItems() {
+  return readCart();
+}
+
+export function getCartCount() {
+  return readCart().reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+}
+
+export function getCartSubtotal() {
+  return readCart().reduce(
+    (sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0),
+    0
+  );
+}
+
+export function clearCart() {
+  writeCart([]);
+}
+
+export function addToCart(item: Omit<CartItem, "quantity"> & { quantity?: number }) {
+  const items = readCart();
+  const incoming = normalizeCartItem({
+    ...item,
+    quantity: Number(item.quantity || 1),
+  });
+
+  const index = items.findIndex((cartItem) => cartItem.id === incoming.id);
+
+  if (index >= 0) {
+    items[index].quantity += incoming.quantity;
+  } else {
+    items.push(incoming);
+  }
+
+  writeCart(items);
+  return items;
+}
+
+export function incrementCartItem(id: number) {
+  const items = readCart().map((item) =>
+    item.id === id ? { ...item, quantity: item.quantity + 1 } : item
+  );
+
+  writeCart(items);
+  return items;
+}
+
+export function decrementCartItem(id: number) {
+  const items = readCart()
+    .map((item) =>
+      item.id === id ? { ...item, quantity: item.quantity - 1 } : item
+    )
+    .filter((item) => item.quantity > 0);
+
+  writeCart(items);
+  return items;
+}
+
+export function removeCartItem(id: number) {
+  const items = readCart().filter((item) => item.id !== id);
+  writeCart(items);
+  return items;
+}
