@@ -6,19 +6,31 @@ export function proxy(request: NextRequest) {
   const url = request.nextUrl.clone();
   const { pathname, searchParams } = url;
 
-  // Só atua na home
+  // 🔥 PROTEÇÃO ADMIN
+  if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
+    const token =
+      request.cookies.get("venozza_token")?.value ||
+      request.headers.get("authorization");
+
+    if (!token) {
+      const loginUrl = new URL("/admin/login", request.url);
+      return NextResponse.redirect(loginUrl);
+    }
+  }
+
+  // ===== MOBILE / SITE (já existia) =====
+
   if (pathname !== "/") {
     return NextResponse.next();
   }
 
-  // Override manual via query string
   const forcedView = searchParams.get("view");
 
   if (forcedView === "site") {
     const response = NextResponse.next();
     response.cookies.set(COOKIE_NAME, "site", {
       path: "/",
-      maxAge: 60 * 60 * 24 * 30, // 30 dias
+      maxAge: 60 * 60 * 24 * 30,
       sameSite: "lax",
     });
     return response;
@@ -31,13 +43,12 @@ export function proxy(request: NextRequest) {
     const response = NextResponse.redirect(url);
     response.cookies.set(COOKIE_NAME, "mobile", {
       path: "/",
-      maxAge: 60 * 60 * 24 * 30, // 30 dias
+      maxAge: 60 * 60 * 24 * 30,
       sameSite: "lax",
     });
     return response;
   }
 
-  // Preferência persistida
   const savedPreference = request.cookies.get(COOKIE_NAME)?.value;
 
   if (savedPreference === "site") {
@@ -49,11 +60,9 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Detecção oficial do Next
   const { device } = userAgent(request);
-  const deviceType = device.type;
 
-  if (deviceType === "mobile" || deviceType === "tablet") {
+  if (device.type === "mobile" || device.type === "tablet") {
     url.pathname = "/m";
     return NextResponse.redirect(url);
   }
@@ -62,5 +71,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/"],
+  matcher: ["/", "/admin/:path*"],
 };

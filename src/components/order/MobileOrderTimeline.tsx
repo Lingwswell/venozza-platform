@@ -12,7 +12,13 @@ const steps: Step[] = [
 ];
 
 function getCurrentIndex(status: string) {
-  const idx = steps.findIndex((item) => item.key === status);
+  const normalized = (status || "").toLowerCase();
+
+  if (normalized === "finalizado" || normalized === "entregue") {
+    return steps.length - 1;
+  }
+
+  const idx = steps.findIndex((item) => item.key === normalized);
   return idx >= 0 ? idx : 0;
 }
 

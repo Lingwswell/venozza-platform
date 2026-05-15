@@ -6,12 +6,16 @@ import {
   clearCart,
   decrementCartItem,
   getCartItems,
+  getCartItemsByStore,
   incrementCartItem,
   removeCartItem,
 } from "@/lib/cart-storage";
 import type { CartItem } from "@/types/order";
 import { setActiveOrderId } from "@/lib/active-order";
 import { formatMoneyFromCents } from "@/lib/utils/formatters";
+import { getAuthToken } from "@/lib/auth/token";
+import { getMobileStoreContext } from "@/lib/mobile-store-context";
+import { saveLocalOrderCode } from "@/lib/local-orders";
 
 export default function MobileCheckoutPage() {
   const [mounted, setMounted] = useState(false);
@@ -27,7 +31,9 @@ export default function MobileCheckoutPage() {
   const deliveryFeeCents = 500;
 
   function loadCart() {
-    const cart = getCartItems();
+    const mobileStore = getMobileStoreContext();
+    const cart = getCartItemsByStore(mobileStore.storeId);
+
     const safeCart = Array.isArray(cart)
       ? cart.filter(
           (item) =>
@@ -36,7 +42,8 @@ export default function MobileCheckoutPage() {
             typeof item.name === "string" &&
             typeof item.price_cents === "number" &&
             typeof item.quantity === "number" &&
-            item.quantity > 0
+            item.quantity > 0 &&
+            item.storeId === mobileStore.storeId
         )
       : [];
 
@@ -61,13 +68,13 @@ export default function MobileCheckoutPage() {
 
   const finalTotalCents = subtotalCents + (items.length > 0 ? deliveryFeeCents : 0);
 
-  function handleIncrement(id: number) {
+  function handleIncrement(id: string | number) {
     incrementCartItem(id);
     setItems(getCartItems());
     setMessage("");
   }
 
-  function handleDecrement(id: number) {
+  function handleDecrement(id: string | number) {
     decrementCartItem(id);
     const next = getCartItems();
     setItems(next);
@@ -76,7 +83,7 @@ export default function MobileCheckoutPage() {
     }
   }
 
-  function handleRemove(id: number) {
+  function handleRemove(id: string | number) {
     removeCartItem(id);
     const next = getCartItems();
     setItems(next);
@@ -112,17 +119,31 @@ export default function MobileCheckoutPage() {
     setMessage("");
 
     try {
+      const token = getAuthToken();
+      const mobileStore = getMobileStoreContext();
+      const storeId = mobileStore.storeId;
+      const tenantId = mobileStore.tenantId;
+      console.log("[checkout] tenantId:", tenantId);
+      console.log("[checkout] storeId:", storeId);
+
       const response = await fetch("/api/orders", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-tenant-id": tenantId,
+          "x-store-id": storeId,
         },
         body: JSON.stringify({
           customerName,
           phone,
           address,
           notes,
-          items,
+          items: items.map((item) => ({
+            ...item,
+            tenantId,
+            storeId,
+          })),
+          tenantId,
           subtotal: subtotalCents / 100,
           subtotal_cents: subtotalCents,
           deliveryFee: deliveryFeeCents / 100,
@@ -130,6 +151,7 @@ export default function MobileCheckoutPage() {
           total: finalTotalCents / 100,
           total_cents: finalTotalCents,
           paymentMethod,
+          storeId,
         }),
       });
 
@@ -148,8 +170,19 @@ export default function MobileCheckoutPage() {
       setNotes("");
       setPaymentMethod("pix");
 
-      setActiveOrderId(data.order.orderId);
-      window.location.href = `/m/sucesso/${data.order.orderId}`;
+      const orderRef = data?.order?.orderCode || data?.order?.id;
+
+      if (orderRef) {
+        saveLocalOrderCode(String(orderRef));
+      }
+
+      if (!orderRef) {
+        setMessage("Pedido criado, mas o identificador de retorno não veio da API.");
+        return;
+      }
+
+      setActiveOrderId(orderRef);
+      window.location.href = `/m/s/${orderRef}`;
     } catch (error) {
       setMessage("Erro ao enviar pedido.");
       console.error(error);

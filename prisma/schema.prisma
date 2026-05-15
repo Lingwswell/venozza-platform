@@ -8,32 +8,49 @@ datasource db {
 }
 
 model Tenant {
-  id          String   @id @default(cuid())
-  name        String
-  slug        String   @unique
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  stores      Store[]
-  users       User[]
+  stores       Store[]
+  users        User[]
+  orders       Order[]
+  categories   Category[]
+  optionGroups OptionGroup[]
+  optionItems  OptionItem[]
 
   @@map("tenants")
 }
 
 model Store {
-  id          String   @id @default(cuid())
-  tenantId    String
-  name        String
-  slug        String
-  city        String?
-  state       String?
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                   String   @id @default(cuid())
+  tenantId             String
+  name                 String
+  slug                 String
+  addressStreet        String?
+  addressNumber        String?
+  addressComplement    String?
+  addressNeighborhood  String?
+  city                 String?
+  state                String?
+  zipCode              String?
+  latitude             Decimal?
+  longitude            Decimal?
+  deliveryRadiusKm     Decimal?
+  deliveryBaseFeeCents Int?
+  deliveryKmFeeCents   Int?
+  active               Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  users       User[]
+  tenant                    Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  users                     User[]
+  orders                    Order[]
+  productStores             ProductStore[]
+  storeOptionAvailabilities StoreOptionAvailability[]
 
   @@unique([tenantId, slug])
   @@index([tenantId])
@@ -41,39 +58,240 @@ model Store {
 }
 
 model User {
-  id          String   @id @default(cuid())
-  tenantId    String
-  storeId     String?
-  name        String
-  email       String   @unique
-  password    String
-  role        String
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  tenantId  String
+  storeId   String?
+  name      String
+  email     String   @unique
+  password  String
+  role      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  store       Store?   @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  store  Store? @relation(fields: [storeId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([storeId])
   @@map("users")
 }
 
+model Category {
+  id           String   @id @default(cuid())
+  tenantId     String
+  name         String
+  slug         String
+  icon         String?
+  sortOrder    Int      @default(0)
+  active       Boolean  @default(true)
+  showInMobile Boolean  @default(true)
+  showInSite   Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant               Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  categoryOptionGroups CategoryOptionGroup[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@index([active])
+  @@index([sortOrder])
+  @@map("categories")
+}
+
 model Product {
+  id                  String               @id @default(cuid())
+  name                String
+  price_cents         Int
+  storeId             String
+  createdAt           DateTime             @default(now())
+  available           Boolean              @default(true)
+  category            String
+  customizationType   String               @default("auto")
+  description         String?
+  image               String?
+  productStores       ProductStore[]
+  productOptionGroups ProductOptionGroup[]
+}
+
+model ProductStore {
   id          String   @id @default(cuid())
-  name        String
-  price       Float
+  productId   String
   storeId     String
-  createdAt   DateTime @default(now())
   available   Boolean  @default(true)
-  category    String
+  stock       Int      @default(0)
+  price_cents Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store   Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, storeId])
+  @@index([productId])
+  @@index([storeId])
+  @@index([available])
+  @@map("product_stores")
+}
+
+model OptionGroup {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  slug        String
   description String?
-  image       String?
+  type        String   @default("generic")
+  required    Boolean  @default(false)
+  minSelect   Int      @default(0)
+  maxSelect   Int      @default(1)
+  sortOrder   Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant               Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items                OptionItem[]
+  productOptionGroups  ProductOptionGroup[]
+  categoryOptionGroups CategoryOptionGroup[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@index([active])
+  @@index([sortOrder])
+  @@map("option_groups")
+}
+
+model OptionItem {
+  id            String   @id @default(cuid())
+  tenantId      String
+  optionGroupId String
+  name          String
+  slug          String
+  description   String?
+  price_cents   Int      @default(0)
+  sortOrder     Int      @default(0)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant                    Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  optionGroup               OptionGroup               @relation(fields: [optionGroupId], references: [id], onDelete: Cascade)
+  storeOptionAvailabilities StoreOptionAvailability[]
+
+  @@unique([optionGroupId, slug])
+  @@index([tenantId])
+  @@index([optionGroupId])
+  @@index([active])
+  @@index([sortOrder])
+  @@map("option_items")
+}
+
+model ProductOptionGroup {
+  id            String   @id @default(cuid())
+  productId     String
+  optionGroupId String
+  sortOrder     Int      @default(0)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  product     Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  optionGroup OptionGroup @relation(fields: [optionGroupId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, optionGroupId])
+  @@index([productId])
+  @@index([optionGroupId])
+  @@index([active])
+  @@index([sortOrder])
+  @@map("product_option_groups")
+}
+
+model CategoryOptionGroup {
+  id            String   @id @default(cuid())
+  categoryId    String
+  optionGroupId String
+  sortOrder     Int      @default(0)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  category    Category    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  optionGroup OptionGroup @relation(fields: [optionGroupId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, optionGroupId])
+  @@index([categoryId])
+  @@index([optionGroupId])
+  @@index([active])
+  @@index([sortOrder])
+  @@map("category_option_groups")
+}
+
+model StoreOptionAvailability {
+  id           String   @id @default(cuid())
+  storeId      String
+  optionItemId String
+  available    Boolean  @default(true)
+  stock        Int?
+  price_cents  Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  store      Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  optionItem OptionItem @relation(fields: [optionItemId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, optionItemId])
+  @@index([storeId])
+  @@index([optionItemId])
+  @@index([available])
+  @@map("store_option_availabilities")
 }
 
 model Order {
-  id        String   @id @default(cuid())
-  total     Float
-  createdAt DateTime @default(now())
+  id             String   @id @default(cuid())
+  orderCode      String   @unique
+  tenantId       String
+  storeId        String
+  customerName   String
+  phone          String
+  address        String
+  notes          String?
+  subtotal_cents Int
+  freight_cents  Int
+  total_cents    Int
+  paymentMethod  String
+  status         String   @default("novo")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  store  Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  items  OrderItem[]
+
+  @@index([tenantId])
+  @@index([storeId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id          String   @id @default(cuid())
+  orderId     String
+  productId   String?
+  name        String
+  quantity    Int
+  price_cents Int
+  total_cents Int
+  note        String?
+  size        String?
+  crust       String?
+  addons_json String?
+  createdAt   DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
 }

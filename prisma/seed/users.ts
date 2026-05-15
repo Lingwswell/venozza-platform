@@ -1,4 +1,4 @@
-import "dotenv/config";
+import bcrypt from "bcryptjs";
 import { PrismaClient } from "../../src/generated/prisma/client";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -36,10 +36,13 @@ export async function seedUsers() {
     throw new Error("Store não encontrada.");
   }
 
+  const passwordHash = await bcrypt.hash("123456", 10);
+
   await prisma.user.upsert({
     where: { email: "admin@venozza.com" },
     update: {
       name: "Administrador VenoZza",
+      password: passwordHash,
       role: "owner",
       active: true,
       tenantId: tenant.id,
@@ -48,7 +51,7 @@ export async function seedUsers() {
     create: {
       name: "Administrador VenoZza",
       email: "admin@venozza.com",
-      password: "123456",
+      password: passwordHash,
       role: "owner",
       active: true,
       tenantId: tenant.id,
@@ -60,6 +63,7 @@ export async function seedUsers() {
     where: { email: "operador.centro@venozza.com" },
     update: {
       name: "Operador Centro",
+      password: passwordHash,
       role: "operator",
       active: true,
       tenantId: tenant.id,
@@ -68,7 +72,7 @@ export async function seedUsers() {
     create: {
       name: "Operador Centro",
       email: "operador.centro@venozza.com",
-      password: "123456",
+      password: passwordHash,
       role: "operator",
       active: true,
       tenantId: tenant.id,

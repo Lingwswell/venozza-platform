@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { getLocalOrderCodes } from "@/lib/local-orders";
 
 type Order = {
-  orderId: string;
+  orderCode: string;
   status: string;
-  total: number;
+  total?: number;
+  total_cents?: number;
   createdAt: string;
 };
 
@@ -17,15 +19,76 @@ const statusLabel: Record<string, string> = {
   forno: "No forno",
   pronto: "Pronto",
   saiu_entrega: "Saiu para entrega",
+  finalizado: "Finalizado",
   entregue: "Entregue",
   cancelado: "Cancelado",
 };
 
-function money(value: number) {
+function moneyFromOrder(order: Order) {
+  const value =
+    typeof order.total === "number"
+      ? order.total
+      : typeof order.total_cents === "number"
+        ? order.total_cents / 100
+        : 0;
+
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
     currency: "BRL",
   }).format(value || 0);
+}
+
+function normalizeOrder(payload: any): Order | null {
+  const raw = payload?.order || payload?.data || payload;
+
+  if (!raw?.orderCode) return null;
+
+  return {
+    orderCode: String(raw.orderCode),
+    status: String(raw.status || "novo"),
+    total:
+      typeof raw.total === "number"
+        ? raw.total
+        : typeof raw.total_cents === "number"
+          ? raw.total_cents / 100
+          : 0,
+    total_cents: typeof raw.total_cents === "number" ? raw.total_cents : undefined,
+    createdAt: raw.createdAt || new Date().toISOString(),
+  };
+}
+
+function persistValidOrderCodes(orders: Order[]) {
+  if (typeof window === "undefined") return;
+
+  const codes = orders
+    .map((order) => order.orderCode)
+    .filter(Boolean);
+
+  window.localStorage.setItem(
+    "venozza_local_order_codes",
+    JSON.stringify(codes)
+  );
+
+  window.localStorage.setItem(
+    "venozza_order_codes",
+    JSON.stringify(codes)
+  );
+
+  window.localStorage.setItem(
+    "venozza_order_history",
+    JSON.stringify(
+      orders.map((order) => ({
+        id: order.orderCode,
+        orderCode: order.orderCode,
+        order_code: order.orderCode,
+        status: order.status,
+        total: order.total,
+        total_cents: order.total_cents,
+        createdAt: order.createdAt,
+        saved_at: new Date().toISOString(),
+      }))
+    )
+  );
 }
 
 export default function PedidosPage() {
@@ -35,15 +98,43 @@ export default function PedidosPage() {
   useEffect(() => {
     async function loadOrders() {
       try {
-        const res = await fetch("/api/orders", { cache: "no-store" });
-        const data = await res.json();
+        const codes = getLocalOrderCodes();
 
-        if (res.ok && data?.ok && Array.isArray(data.orders)) {
-          setOrders(data.orders);
-        } else {
+        console.log("[mobile][pedidos] local order codes:", codes);
+
+        if (codes.length === 0) {
           setOrders([]);
+          return;
         }
-      } catch {
+
+        const loaded = await Promise.all(
+          codes.map(async (code) => {
+            try {
+              const res = await fetch(`/api/orders/${encodeURIComponent(code)}`, {
+                cache: "no-store",
+              });
+
+              const data = await res.json().catch(() => ({}));
+
+              if (!res.ok || data?.ok === false) {
+                console.warn("[mobile][pedidos] pedido não carregado:", code, data);
+                return null;
+              }
+
+              return normalizeOrder(data);
+            } catch (error) {
+              console.warn("[mobile][pedidos] erro ao carregar:", code, error);
+              return null;
+            }
+          })
+        );
+
+        const validOrders = loaded.filter(Boolean) as Order[];
+
+        persistValidOrderCodes(validOrders);
+        setOrders(validOrders);
+      } catch (error) {
+        console.warn("[mobile][pedidos] erro geral:", error);
         setOrders([]);
       } finally {
         setLoading(false);
@@ -79,8 +170,8 @@ export default function PedidosPage() {
           <div className="space-y-3">
             {orders.map((order) => (
               <Link
-                key={order.orderId}
-                href={`/m/s/${order.orderId}`}
+                key={order.orderCode}
+                href={`/m/s/${order.orderCode}`}
                 className="block rounded-3xl border border-[#eadfda] bg-white p-4 shadow-sm"
               >
                 <div className="flex items-start justify-between gap-3">
@@ -89,7 +180,7 @@ export default function PedidosPage() {
                       Número do pedido
                     </p>
                     <h2 className="mt-1 text-lg font-black text-[#171717]">
-                      #{order.orderId}
+                      #{order.orderCode}
                     </h2>
                   </div>
 
@@ -103,7 +194,7 @@ export default function PedidosPage() {
                     {new Date(order.createdAt).toLocaleString("pt-BR")}
                   </span>
                   <span className="font-black text-[#171717]">
-                    {money(order.total)}
+                    {moneyFromOrder(order)}
                   </span>
                 </div>
               </Link>

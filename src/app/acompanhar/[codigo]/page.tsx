@@ -11,7 +11,7 @@ type OrderItem = {
 };
 
 type OrderData = {
-  orderId: string;
+  orderCode: string;
   customerName: string;
   phone?: string;
   address?: string;

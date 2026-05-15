@@ -13,8 +13,9 @@ type OrderItem = {
 };
 
 type OrderData = {
-  orderId: string;
+  orderCode: string;
   total?: number;
+  total_cents?: number;
   status: string;
   items?: OrderItem[];
 };
@@ -64,7 +65,7 @@ export default function MobileTrackPage({
           if (data.order.status === "entregue" || data.order.status === "cancelado") {
             clearActiveOrderId();
           } else {
-            setActiveOrderId(data.order.orderId);
+            setActiveOrderId(data.order.orderCode);
           }
         } else {
           setOrder(null);
@@ -109,7 +110,7 @@ export default function MobileTrackPage({
 
           {order ? (
             <p className="mt-4 text-[18px] text-neutral-700">
-              Total do pedido: {money(order.total)}
+              Total do pedido: {money(typeof order.total_cents === "number" ? order.total_cents / 100 : order.total)}
             </p>
           ) : null}
         </section>

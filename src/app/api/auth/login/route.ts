@@ -43,6 +43,8 @@ export async function POST(req: Request) {
         userId: user.id,
         email: user.email,
         role: user.role,
+        tenantId: user.tenantId,
+        storeId: user.storeId,
       },
       secret,
       { expiresIn: "7d" }
@@ -56,6 +58,8 @@ export async function POST(req: Request) {
         name: user.name,
         email: user.email,
         role: user.role,
+        tenantId: user.tenantId,
+        storeId: user.storeId,
       },
     });
   } catch (error) {

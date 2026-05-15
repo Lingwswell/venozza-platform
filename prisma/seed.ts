@@ -2,115 +2,80 @@ import "dotenv/config";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL não definida.");
+}
+
 const prisma = new PrismaClient({
-  adapter: new PrismaPg({
-    connectionString: process.env.DATABASE_URL!,
-  }),
+  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
 });
 
+const CATALOG = [
+  { name: "Pizza Mussarela",    description: "Molho especial, mussarela e orégano.",       image: "/images/produtos/mussarela.jpg",       price_cents: 3990, available: true, category: "pizzas"     },
+  { name: "Pizza Calabresa",    description: "Calabresa fatiada, cebola e molho da casa.",  image: "/images/produtos/calabresa.jpg",        price_cents: 4290, available: true, category: "pizzas"     },
+  { name: "Frango com Catupiry",description: "Frango temperado com cobertura cremosa.",     image: "/images/produtos/frango-catupiry.jpg",  price_cents: 4490, available: true, category: "pizzas"     },
+  { name: "Coca-Cola 2L",       description: "Refrigerante gelado 2 litros.",               image: "/images/produtos/coca-2l.jpg",          price_cents: 1290, available: true, category: "bebidas"    },
+  { name: "Guaraná 2L",         description: "Refrigerante gelado 2 litros.",               image: "/images/produtos/guarana-2l.jpg",       price_cents: 1090, available: true, category: "bebidas"    },
+  { name: "Petit Gateau",       description: "Sobremesa quente com recheio cremoso.",       image: "/images/produtos/petit-gateau.jpg",     price_cents: 1890, available: true, category: "sobremesas" },
+];
+
 async function main() {
-  const adminEmail = "admin@venozza.com";
+  const tenant = await prisma.tenant.upsert({
+    where: { slug: "venozza" },
+    update: { active: true, name: "VenoZza" },
+    create: { name: "VenoZza", slug: "venozza", active: true },
+  });
+  console.log("✅ Tenant:", tenant.name);
 
   const store = await prisma.store.upsert({
-    where: { slug: "centro" },
-    update: {},
-    create: {
-      name: "VenoZza Centro",
-      slug: "centro",
-    },
+    where: { tenantId_slug: { tenantId: tenant.id, slug: "centro" } },
+    update: { name: "VenoZza Centro", active: true },
+    create: { tenantId: tenant.id, name: "VenoZza Centro", slug: "centro", city: "São Paulo", state: "SP", active: true },
   });
-
-  console.log("✅ Loja criada:", store.name);
+  console.log("✅ Loja:", store.name);
 
   await prisma.user.upsert({
-    where: { email: adminEmail },
-    update: {},
-    create: {
-      name: "Administrador",
-      email: adminEmail,
-      password:
-        "$2b$10$wYQxH2wGvS3xD9lYV8mN0e6v0EwXlYv8x0mM7Q5m2D2k7iQmQx9QW",
-      role: "SUPER_ADMIN",
-    },
+    where: { email: "admin@venozza.com" },
+    update: { tenantId: tenant.id, storeId: store.id, role: "owner", active: true },
+    create: { tenantId: tenant.id, storeId: store.id, name: "Administrador", email: "admin@venozza.com", password: "$2b$10$wYQxH2wGvS3xD9lYV8mN0e6v0EwXlYv8x0mM7Q5m2D2k7iQmQx9QW", role: "owner", active: true },
   });
+  console.log("✅ Usuário admin ok");
 
-  console.log("✅ Usuário admin criado");
-
-  const products = [
-    {
-      name: "Pizza Mussarela",
-      description: "Molho especial, mussarela e orégano.",
-      imageUrl: "/images/produtos/mussarela.jpg",
-      basePrice: 39.9,
-      isAvailable: true,
-      storeId: store.id,
-    },
-    {
-      name: "Pizza Calabresa",
-      description: "Calabresa fatiada, cebola e molho da casa.",
-      imageUrl: "/images/produtos/calabresa.jpg",
-      basePrice: 42.9,
-      isAvailable: true,
-      storeId: store.id,
-    },
-    {
-      name: "Frango com Catupiry",
-      description: "Frango temperado com cobertura cremosa.",
-      imageUrl: "/images/produtos/frango-catupiry.jpg",
-      basePrice: 44.9,
-      isAvailable: true,
-      storeId: store.id,
-    },
-    {
-      name: "Coca-Cola 2L",
-      description: "Refrigerante gelado 2 litros.",
-      imageUrl: "/images/produtos/coca-2l.jpg",
-      basePrice: 12.9,
-      isAvailable: true,
-      storeId: store.id,
-    },
-    {
-      name: "Guaraná 2L",
-      description: "Refrigerante gelado 2 litros.",
-      imageUrl: "/images/produtos/guarana-2l.jpg",
-      basePrice: 10.9,
-      isAvailable: true,
-      storeId: store.id,
-    },
-    {
-      name: "Petit Gateau",
-      description: "Sobremesa quente com recheio cremoso.",
-      imageUrl: "/images/produtos/petit-gateau.jpg",
-      basePrice: 18.9,
-      isAvailable: true,
-      storeId: store.id,
-    },
-  ];
-
-  for (const product of products) {
-    await prisma.product.upsert({
+  for (const item of CATALOG) {
+    const existing = await prisma.product.findFirst({
       where: {
-        // precisa de unique composto no schema: @@unique([storeId, name])
-        // se não tiver, usa findFirst + create como estava antes
-        storeId_name: {
-          storeId: product.storeId,
-          name: product.name,
-        },
+        storeId: store.id,
+        name: item.name,
       },
-      update: {},
-      create: product,
     });
+
+    const product = existing
+      ? await prisma.product.update({
+          where: { id: existing.id },
+          data: {
+            ...item,
+            storeId: store.id,
+          },
+        })
+      : await prisma.product.create({
+          data: {
+            ...item,
+            storeId: store.id,
+          },
+        });
+
+    await prisma.productStore.upsert({
+      where: { productId_storeId: { productId: product.id, storeId: store.id } },
+      update: { available: true, stock: 50 },
+      create: { productId: product.id, storeId: store.id, available: true, stock: 50, price_cents: null },
+    });
+    console.log("  ↳", product.name);
   }
 
-  console.log("✅ Produtos criados");
-  console.log("🎉 Seed concluído com sucesso!");
+  console.log("✅ Catálogo vinculado à loja");
+  console.log("🎉 Seed concluído!");
 }
 
 main()
-  .catch((e) => {
-    console.error("❌ Erro no seed:", e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+  .catch((e) => { console.error("❌", e); process.exit(1); })
+  .finally(() => prisma.$disconnect());

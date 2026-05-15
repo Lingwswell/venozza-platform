@@ -67,9 +67,11 @@ export default function AdminLoginPage() {
         return;
       }
 
-      const storage = remember ? localStorage : sessionStorage;
+      const storage = localStorage;
       storage.setItem("venozza_token", data.token);
       storage.setItem("venozza_user", JSON.stringify(data.user));
+
+      document.cookie = `venozza_token=${data.token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`;
 
       if (remember) {
         localStorage.setItem("venozza_remember", "true");

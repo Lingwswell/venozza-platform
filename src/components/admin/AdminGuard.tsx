@@ -4,11 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getAuthToken } from "@/lib/auth/token";
 
-type Props = {
-  children: React.ReactNode;
-};
-
-export default function AdminGuard({ children }: Props) {
+export default function AdminGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [ready, setReady] = useState(false);
 
@@ -20,7 +16,29 @@ export default function AdminGuard({ children }: Props) {
       return;
     }
 
-    setReady(true);
+    try {
+      // valida formato básico do JWT
+      const parts = token.split(".");
+      if (parts.length !== 3) {
+        throw new Error("Token inválido");
+      }
+
+      const payload = JSON.parse(atob(parts[1]));
+
+      // valida expiração
+      if (payload.exp && Date.now() >= payload.exp * 1000) {
+        throw new Error("Token expirado");
+      }
+
+      setReady(true);
+    } catch {
+      localStorage.removeItem("venozza_token");
+      localStorage.removeItem("venozza_user");
+      sessionStorage.removeItem("venozza_token");
+      sessionStorage.removeItem("venozza_user");
+
+      router.replace("/admin/login");
+    }
   }, [router]);
 
   if (!ready) {
