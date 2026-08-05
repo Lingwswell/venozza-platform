@@ -116,8 +116,16 @@ export default function PedidosPage() {
 
               const data = await res.json().catch(() => ({}));
 
+              if (res.status === 404) {
+                return null;
+              }
+
               if (!res.ok || data?.ok === false) {
-                console.warn("[mobile][pedidos] pedido não carregado:", code, data);
+                console.warn(
+                  "[mobile][pedidos] erro ao carregar pedido:",
+                  code,
+                  data
+                );
                 return null;
               }
 
