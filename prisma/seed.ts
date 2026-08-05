@@ -23,14 +23,27 @@ async function main() {
   const tenant = await prisma.tenant.upsert({
     where: { slug: "venozza" },
     update: { active: true, name: "VenoZza" },
-    create: { name: "VenoZza", slug: "venozza", active: true },
+    create: {
+      id: "cmnqqxn9p000092ozb3kd2dyf",
+      name: "VenoZza",
+      slug: "venozza",
+      active: true,
+    },
   });
   console.log("✅ Tenant:", tenant.name);
 
   const store = await prisma.store.upsert({
     where: { tenantId_slug: { tenantId: tenant.id, slug: "centro" } },
     update: { name: "VenoZza Centro", active: true },
-    create: { tenantId: tenant.id, name: "VenoZza Centro", slug: "centro", city: "São Paulo", state: "SP", active: true },
+    create: {
+      id: "cmnqqxng8000192oz4bt0wo3u",
+      tenantId: tenant.id,
+      name: "VenoZza Centro",
+      slug: "centro",
+      city: "São Paulo",
+      state: "SP",
+      active: true,
+    },
   });
   console.log("✅ Loja:", store.name);
 
