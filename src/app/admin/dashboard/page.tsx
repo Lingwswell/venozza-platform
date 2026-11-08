@@ -257,7 +257,7 @@ export default function AdminDashboardPage() {
   return (
     <AdminShell
       title="Dashboard profissional"
-      subtitle="Visão executiva da operação VenoZza no ambiente de desenvolvimento."
+      subtitle="Visão executiva da operação VenoZza."
     >
       <div className="space-y-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">

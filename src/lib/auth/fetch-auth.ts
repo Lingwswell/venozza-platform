@@ -29,7 +29,7 @@ function getStoredAdminUser(): StoredAdminUser | null {
   }
 }
 
-export async function fetchWithAuth(
+async function fetchWithAuthRaw(
   input: string,
   init: RequestInit = {}
 ): Promise<Response> {
@@ -59,4 +59,33 @@ export async function fetchWithAuth(
     headers,
     cache: init.cache ?? "no-store",
   });
+}
+
+function clearAdminSession() {
+  try {
+    localStorage.removeItem("venozza_token");
+    localStorage.removeItem("venozza_user");
+    sessionStorage.removeItem("venozza_token");
+    sessionStorage.removeItem("venozza_user");
+    document.cookie = "venozza_token=; path=/; max-age=0; SameSite=Lax";
+  } catch {
+    // armazenamento indisponivel
+  }
+}
+
+export async function fetchWithAuth(
+  input: string,
+  init: RequestInit = {}
+): Promise<Response> {
+  const response = await fetchWithAuthRaw(input, init);
+
+  if (response.status === 401 && typeof window !== "undefined") {
+    clearAdminSession();
+
+    if (!window.location.pathname.startsWith("/admin/login")) {
+      window.location.href = "/admin/login?sessao=expirada";
+    }
+  }
+
+  return response;
 }
