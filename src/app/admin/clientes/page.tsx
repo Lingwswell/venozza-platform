@@ -6,7 +6,7 @@ export default function Page() {
   return (
     <AdminShell
       title="Clientes"
-      subtitle="Módulo em preparação no ambiente de desenvolvimento."
+      subtitle="Cadastro e histórico de clientes da sua operação. Em breve."
     >
       <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-orange-600">

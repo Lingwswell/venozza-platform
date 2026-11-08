@@ -181,12 +181,6 @@ export default function AdminShell({
               </div>
 
               <div className="flex items-center gap-2 sm:gap-3">
-                <div className="hidden rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 lg:block">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                    Ambiente
-                  </p>
-                  <p className="text-xs font-bold text-slate-900">DEV • porta 3000</p>
-                </div>
 
                 <div className="flex min-w-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-2 shadow-sm">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#4f46e5,#6d28d9)] text-xs font-bold text-white">

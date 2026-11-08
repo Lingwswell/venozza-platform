@@ -374,7 +374,7 @@ export default function AdminDashboardPage() {
           ))}
         </div>
 
-        <div className="grid gap-5 xl:grid-cols-[1.45fr_0.85fr]">
+        <div className="grid gap-5">
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between gap-4">
               <div>
@@ -385,8 +385,7 @@ export default function AdminDashboardPage() {
                   Centro de comando da operação
                 </h3>
                 <p className="mt-2 max-w-2xl text-sm text-slate-500">
-                  Essa área será a base para pedidos, expedição, financeiro, multi-loja,
-                  catálogo, campanhas e monitoramento operacional.
+                  Acesse rapidamente os principais módulos da operação.
                 </p>
               </div>
 
@@ -422,47 +421,7 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          <div className="space-y-5">
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-orange-600">
-                Prioridades
-              </p>
-              <h3 className="mt-2 text-xl font-black text-slate-900">
-                Próximos passos do admin
-              </h3>
-
-              <div className="mt-5 space-y-4">
-                {[
-                  "Criar módulos reais de pedidos e catálogo",
-                  "Implementar menu lateral com páginas funcionais",
-                  "Ligar métricas reais do banco",
-                  "Preparar base multi-loja e permissões",
-                ].map((item) => (
-                  <div
-                    key={item}
-                    className="flex items-start gap-3 rounded-2xl bg-slate-50 px-4 py-3"
-                  >
-                    <span className="mt-0.5 text-orange-600">●</span>
-                    <p className="text-sm text-slate-700">{item}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-[linear-gradient(135deg,#1e293b,#0f172a)] p-5 text-white shadow-sm">
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-orange-300">
-                Ambiente atual
-              </p>
-              <h3 className="mt-2 text-2xl font-black">Desenvolvimento</h3>
-              <p className="mt-3 text-sm text-slate-300">
-                Todas as alterações estão sendo trabalhadas apenas no DEV,
-                sem impactar produção.
-              </p>
-              <div className="mt-5 rounded-2xl bg-white/10 px-4 py-3 text-sm text-slate-200">
-                URL base: http://192.168.15.15:3000
-              </div>
-            </div>
-          </div>
+          
         </div>
       </div>
     </AdminShell>
