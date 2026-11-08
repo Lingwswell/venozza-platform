@@ -1,13 +1,21 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { clientKey, rateLimit } from "@/lib/rate-limit";
 
 export async function GET(
-  _req: Request,
+  req: Request,
   context: { params: Promise<{ codigo: string }> }
 ) {
   try {
+    if (!rateLimit(`order-lookup:${clientKey(req)}`, 120, 60 * 1000)) {
+      return NextResponse.json(
+        { ok: false, error: "Muitas consultas. Tente novamente em instantes." },
+        { status: 429 }
+      );
+    }
+
     const { codigo } = await context.params;
-    const normalizedCode = String(codigo || "").trim();
+    const normalizedCode = String(codigo || "").trim().toUpperCase();
 
     if (!normalizedCode) {
       return NextResponse.json(
@@ -44,10 +52,7 @@ export async function GET(
       order: {
         id: order.id,
         orderCode: order.orderCode,
-        customerName: order.customerName,
-        phone: order.phone,
-        address: order.address,
-        notes: order.notes,
+        customerName: String(order.customerName || "").trim().split(" ")[0] || null,
         subtotal_cents: order.subtotal_cents,
         freight_cents: order.freight_cents,
         total_cents: order.total_cents,

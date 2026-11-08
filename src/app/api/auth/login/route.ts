@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { prisma } from "@/lib/db";
+import { clientKey, rateLimit } from "@/lib/rate-limit";
 
 export async function POST(req: Request) {
   try {
@@ -16,13 +17,23 @@ export async function POST(req: Request) {
       );
     }
 
+    if (
+      !rateLimit(`login-ip:${clientKey(req)}`, 30, 15 * 60 * 1000) ||
+      !rateLimit(`login-email:${email}`, 8, 15 * 60 * 1000)
+    ) {
+      return NextResponse.json(
+        { error: "Muitas tentativas. Tente novamente em alguns minutos." },
+        { status: 429 }
+      );
+    }
+
     const user = await prisma.user.findUnique({
       where: { email },
     });
 
     if (!user) {
       return NextResponse.json(
-        { error: "Usuário não encontrado" },
+        { error: "E-mail ou senha inválidos" },
         { status: 401 }
       );
     }
@@ -31,7 +42,7 @@ export async function POST(req: Request) {
 
     if (!valid) {
       return NextResponse.json(
-        { error: "Senha inválida" },
+        { error: "E-mail ou senha inválidos" },
         { status: 401 }
       );
     }

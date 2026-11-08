@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import { AppError } from "@/lib/api/errors";
 import { OrderRepository } from "@/lib/repositories/order.repository";
 import { prisma } from "@/lib/db";
@@ -303,10 +304,19 @@ function normalizePhone(phone?: string): string | undefined {
   return onlyDigits || undefined;
 }
 
+const ORDER_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+
+function makeOrderCode(): string {
+  let part = "";
+  for (let i = 0; i < 8; i += 1) {
+    part += ORDER_CODE_ALPHABET[randomInt(ORDER_CODE_ALPHABET.length)];
+  }
+  return `VZ-${part.slice(0, 4)}-${part.slice(4)}`;
+}
+
 async function generateUniqueOrderCode(): Promise<string> {
   for (let attempt = 0; attempt < 20; attempt += 1) {
-    const n = Math.floor(1000 + Math.random() * 9000);
-    const orderCode = `VZ-${n}`;
+    const orderCode = makeOrderCode();
 
     const existing = await prisma.order.findUnique({
       where: {
