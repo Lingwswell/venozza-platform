@@ -1,11 +1,11 @@
 import { randomInt } from "node:crypto";
 import { AppError } from "@/lib/api/errors";
 import {
-  pizzaBorderOptions,
-  pizzaDoughOptions,
-  pizzaExtraDrinkOptions,
-  pizzaSizeOptions,
-} from "@/lib/product-customizations";
+  defaultCatalogOption,
+  loadOptionCatalog,
+  type CatalogOption,
+  type OptionCatalog,
+} from "@/lib/options-catalog";
 import { OrderRepository } from "@/lib/repositories/order.repository";
 import { prisma } from "@/lib/db";
 import { validateCreateOrder } from "@/lib/validators/order.validator";
@@ -33,101 +33,71 @@ function includesAny(value: string, terms: string[]) {
   return terms.some((term) => normalized.includes(normalizeText(term)));
 }
 
-function getPizzaSizeDeltaCents(item: CreateOrderItemInput) {
-  const size = String(item.size || "");
-  const addons = Array.isArray(item.addons) ? item.addons : [];
-  const text = [size, ...addons].join(" ");
+const NO_OPTION: CatalogOption = { id: "", slug: "", name: "", price_cents: 0 };
 
-  if (includesAny(text, ["25cm", "pequena"])) return -1000;
-  if (includesAny(text, ["40cm", "familia", "família"])) return 2000;
-  return 0;
+// Escolhe a opcao pelo nome EXATO. Sem escolha, usa a padrao (preco zero).
+function pickOption(
+  options: CatalogOption[],
+  value: string,
+  errorMessage: string
+): CatalogOption {
+  const wanted = value.trim();
+
+  if (wanted) {
+    const match = findExactOption(options, wanted);
+
+    if (!match) {
+      throw new AppError(errorMessage, 400);
+    }
+
+    return match;
+  }
+
+  return defaultCatalogOption(options) ?? NO_OPTION;
 }
 
-function getPizzaCrustDeltaCents(item: CreateOrderItemInput) {
-  const crust = String(item.crust || "");
-  const addons = Array.isArray(item.addons) ? item.addons : [];
-  const text = [crust, ...addons.filter((addon) => normalizeText(addon).includes("borda"))].join(" ");
+function getAddonValue(addons: string[], label: string): string {
+  const wanted = `${normalizeText(label)}:`;
+  const found = addons.find((addon) =>
+    normalizeText(addon).startsWith(wanted)
+  );
 
-  if (includesAny(text, ["catupiry"])) return 1590;
-  if (includesAny(text, ["cream cheese"])) return 1590;
-  if (includesAny(text, ["mucarela", "muçarela"])) return 1790;
-  if (includesAny(text, ["calabresa c", "calabresa com"])) return 1790;
-  if (includesAny(text, ["chocolate ao leite"])) return 1090;
-  if (includesAny(text, ["creme de avela", "creme de avelã"])) return 1390;
-
-  return 0;
+  return found ? found.slice(found.indexOf(":") + 1).trim() : "";
 }
 
-function getPizzaDoughDeltaCents(item: CreateOrderItemInput) {
-  const addons = Array.isArray(item.addons) ? item.addons : [];
-  const doughText = addons
-    .filter((addon) => normalizeText(addon).includes("massa"))
-    .join(" ");
+function getPizzaExtraDrinksCents(
+  addons: string[],
+  catalog: OptionCatalog
+): number {
+  let total = 0;
 
-  if (includesAny(doughText, ["integral"])) return 400;
+  for (const addon of addons) {
+    const match = addon.trim().match(/^(\d{1,2})\s*x\s+(.+)$/i);
 
-  return 0;
-}
+    if (!match) continue;
 
-const pizzaExtraDrinkPrices: Record<string, number> = {
-  "guarana antarctica - 1,5l": 1290,
-  "guarana antarctica - 2l": 1490,
-  "pepsi - 1,5l": 1290,
-  "pepsi - 2l": 1490,
-};
+    const quantity = Number(match[1]);
+    const drink = findExactOption(catalog.pizzaDrinks, match[2]);
 
-function getPizzaExtraDrinksCents(item: CreateOrderItemInput) {
-  const addons = Array.isArray(item.addons) ? item.addons : [];
+    if (!drink || quantity <= 0) {
+      throw new AppError("Bebida inválida no pedido.", 400);
+    }
 
-  return addons.reduce((total, addon) => {
-    const normalized = normalizeText(addon);
-    const quantityMatch = normalized.match(/^(\d+)\s*x\s+(.+)$/);
+    total += drink.price_cents * quantity;
+  }
 
-    if (!quantityMatch) return total;
-
-    const quantity = Math.max(0, Number(quantityMatch[1] || 0));
-    const label = quantityMatch[2]
-      .replace(/\s+/g, " ")
-      .trim();
-
-    const price = pizzaExtraDrinkPrices[label] || 0;
-
-    return total + quantity * price;
-  }, 0);
-}
-
-function getBatataSizeDeltaCents(item: CreateOrderItemInput) {
-  const size = String(item.size || "");
-  const addons = Array.isArray(item.addons) ? item.addons : [];
-  const text = [size, ...addons].join(" ");
-
-  if (includesAny(text, ["media", "média"])) return 500;
-  if (includesAny(text, ["grande"])) return 1000;
-
-  return 0;
-}
-
-function getBatataFillingDeltaCents(item: CreateOrderItemInput) {
-  const crust = String(item.crust || "");
-  const addons = Array.isArray(item.addons) ? item.addons : [];
-  const text = [crust, ...addons.filter((addon) => normalizeText(addon).includes("recheio"))].join(" ");
-
-  if (includesAny(text, ["cheddar"])) return 500;
-  if (includesAny(text, ["catupiry"])) return 500;
-  if (includesAny(text, ["bacon"])) return 700;
-  if (includesAny(text, ["calabresa"])) return 700;
-  if (includesAny(text, ["frango cremoso"])) return 800;
-
-  return 0;
+  return total;
 }
 
 function getCustomizationPriceDeltaCents(
   item: CreateOrderItemInput,
-  context: ProductPricingContext
+  context: ProductPricingContext,
+  catalog: OptionCatalog
 ) {
   const category = normalizeText(String(context.category || ""));
   const customizationType = normalizeText(String(context.customizationType || "auto"));
   const name = normalizeText(String(item.name || ""));
+  const addons = Array.isArray(item.addons) ? item.addons : [];
 
   const isDrink =
     customizationType === "bebida" ||
@@ -153,20 +123,44 @@ function getCustomizationPriceDeltaCents(
     );
 
   if (isPizza) {
-    return Math.max(
-      0,
-      getPizzaSizeDeltaCents(item) +
-        getPizzaCrustDeltaCents(item) +
-        getPizzaDoughDeltaCents(item) +
-        getPizzaExtraDrinksCents(item)
+    const size = pickOption(
+      catalog.pizzaSizes,
+      getAddonValue(addons, "tamanho") || String(item.size || ""),
+      "Tamanho inválido."
+    );
+    const border = pickOption(
+      catalog.pizzaBorders,
+      getAddonValue(addons, "borda") || String(item.crust || ""),
+      "Borda inválida."
+    );
+    const dough = pickOption(
+      catalog.pizzaDoughs,
+      getAddonValue(addons, "massa"),
+      "Massa inválida."
+    );
+
+    // Pode ser negativo (pizza pequena): o piso de zero e aplicado no preco final.
+    return (
+      size.price_cents +
+      border.price_cents +
+      dough.price_cents +
+      getPizzaExtraDrinksCents(addons, catalog)
     );
   }
 
   if (isBatata) {
-    return Math.max(
-      0,
-      getBatataSizeDeltaCents(item) + getBatataFillingDeltaCents(item)
+    const size = pickOption(
+      catalog.potatoSizes,
+      getAddonValue(addons, "tamanho da batata") || String(item.size || ""),
+      "Tamanho da batata inválido."
     );
+    const filling = pickOption(
+      catalog.potatoFillings,
+      getAddonValue(addons, "recheio") || String(item.crust || ""),
+      "Recheio inválido."
+    );
+
+    return size.price_cents + filling.price_cents;
   }
 
   return 0;
@@ -246,7 +240,8 @@ async function priceHalfHalfItem(
   item: CreateOrderItemInput,
   productId: string,
   qty: number,
-  storeId: string
+  storeId: string,
+  catalog: OptionCatalog
 ): Promise<CreateOrderItemInput> {
   const flavorIds = productId
     .slice(HALF_HALF_PREFIX.length)
@@ -266,28 +261,17 @@ async function priceHalfHalfItem(
 
   const addons = Array.isArray(item.addons) ? item.addons : [];
 
-  const crustName = String(item.crust || "").trim();
-  const border = crustName
-    ? findExactOption(pizzaBorderOptions, crustName)
-    : pizzaBorderOptions[0];
-
-  if (!border) {
-    throw new AppError("Borda inválida.", 400);
-  }
-
-  const doughAddon = addons.find((addon) =>
-    normalizeText(addon).startsWith("massa:")
+  const border = pickOption(
+    catalog.pizzaBorders,
+    String(item.crust || ""),
+    "Borda inválida."
   );
-  const doughName = doughAddon
-    ? doughAddon.slice(doughAddon.indexOf(":") + 1).trim()
-    : "";
-  const dough = doughName
-    ? findExactOption(pizzaDoughOptions, doughName)
-    : pizzaDoughOptions[0];
 
-  if (!dough) {
-    throw new AppError("Massa inválida.", 400);
-  }
+  const dough = pickOption(
+    catalog.pizzaDoughs,
+    getAddonValue(addons, "massa"),
+    "Massa inválida."
+  );
 
   const drinkLines: string[] = [];
   let drinksCents = 0;
@@ -297,7 +281,7 @@ async function priceHalfHalfItem(
     if (!match) continue;
 
     const drinkQty = Number(match[1]);
-    const drink = findExactOption(pizzaExtraDrinkOptions, match[2]);
+    const drink = findExactOption(catalog.pizzaDrinks, match[2]);
 
     if (!drink || drinkQty <= 0) {
       throw new AppError("Bebida inválida no pedido.", 400);
@@ -307,9 +291,16 @@ async function priceHalfHalfItem(
     drinkLines.push(`${drinkQty}x ${drink.name}`);
   }
 
-  const size40 = pizzaSizeOptions.find((option) => option.id === "40cm");
-  const sizeName = size40?.name ?? "Pizza Família - 40cm";
-  const sizeDeltaCents = size40?.price_delta_cents ?? 0;
+  const size40 = catalog.pizzaSizes.find(
+    (option) => option.slug === "tamanho-40cm"
+  );
+
+  if (!size40) {
+    throw new AppError("Tamanho família indisponível para esta loja.", 400);
+  }
+
+  const sizeName = size40.name;
+  const sizeDeltaCents = size40.price_cents;
 
   const baseCents = Math.max(...flavors.map((flavor) => flavor.priceCents));
 
@@ -338,6 +329,7 @@ async function normalizeItemsWithDBPrice(
   storeId: string
 ): Promise<CreateOrderItemInput[]> {
   const normalizedItems: CreateOrderItemInput[] = [];
+  const catalog = await loadOptionCatalog(storeId);
 
   for (const item of items) {
     const qty =
@@ -358,7 +350,7 @@ async function normalizeItemsWithDBPrice(
 
     if (productId.startsWith(HALF_HALF_PREFIX)) {
       normalizedItems.push(
-        await priceHalfHalfItem(item, productId, qty, storeId)
+        await priceHalfHalfItem(item, productId, qty, storeId, catalog)
       );
       continue;
     }
@@ -415,10 +407,14 @@ async function normalizeItemsWithDBPrice(
         throw new AppError("Preço do produto inválido para esta loja.", 400);
       }
 
-      const customizationDeltaCents = getCustomizationPriceDeltaCents(item, {
-        category: productStore.product.category,
-        customizationType: productStore.product.customizationType,
-      });
+      const customizationDeltaCents = getCustomizationPriceDeltaCents(
+        item,
+        {
+          category: productStore.product.category,
+          customizationType: productStore.product.customizationType,
+        },
+        catalog
+      );
 
       const priceCents = Math.max(0, basePriceCents + customizationDeltaCents);
 
@@ -450,10 +446,14 @@ async function normalizeItemsWithDBPrice(
       throw new AppError("Produto indisponível ou inválido para esta loja.", 400);
     }
 
-    const customizationDeltaCents = getCustomizationPriceDeltaCents(item, {
-      category: legacyProduct.category,
-      customizationType: legacyProduct.customizationType,
-    });
+    const customizationDeltaCents = getCustomizationPriceDeltaCents(
+      item,
+      {
+        category: legacyProduct.category,
+        customizationType: legacyProduct.customizationType,
+      },
+      catalog
+    );
 
     normalizedItems.push({
       ...item,
