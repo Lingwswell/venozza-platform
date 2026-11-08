@@ -69,7 +69,8 @@ export async function getAuthContextFromRequest(req: Request): Promise<AuthConte
     };
   }
 
-  // 🔥 NOVO: fluxo público (checkout mobile)
+  // Fluxo público/mobile: loja identificada pelos headers.
+  // Headers nunca concedem papel administrativo.
   if (storeHeader) {
     return {
       userId: "public-client",
@@ -80,5 +81,5 @@ export async function getAuthContextFromRequest(req: Request): Promise<AuthConte
     };
   }
 
-  throw new Error("Authorization, x-user-role ou x-store-id é obrigatório");
+  throw new Error("Authorization ou x-store-id é obrigatório");
 }

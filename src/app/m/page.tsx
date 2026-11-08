@@ -2,6 +2,15 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import {
+  Bell,
+  ChevronDown,
+  Clock3,
+  MapPin,
+  Search,
+  ShoppingBag,
+  Star,
+} from "lucide-react";
 import { addToCart, getCartCountByStore, purgeLegacyCartItems } from "@/lib/cart-storage";
 import { heroSlides } from "@/data/home-data";
 import AppBottomNav from "@/components/navigation/AppBottomNav";
@@ -414,70 +423,143 @@ export default function MobileAppPage() {
         }
       `}</style>
       <div className="mx-auto w-full max-w-md px-4 pb-40 pt-3">
-        <header className="mb-4">
+        <header className="mb-5">
           <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#ff1010] text-white shadow-sm">
+            <button
+              type="button"
+              className="flex min-w-0 flex-1 items-center gap-3 text-left"
+            >
+              <div className="grid h-12 w-12 shrink-0 place-items-center rounded-[18px] bg-gradient-to-br from-[#ff2a1f] to-[#c90816] text-2xl shadow-[0_10px_25px_rgba(214,23,23,0.28)]">
                 🍕
               </div>
-              <div>
-                <div className="text-lg font-black leading-none text-[#ff1010]">
-                  VenoZza
+
+              <div className="min-w-0">
+                <div className="flex items-center gap-1">
+                  <span className="truncate text-[17px] font-black text-[#171717]">
+                    VenoZza
+                  </span>
+                  <ChevronDown className="h-4 w-4 shrink-0 text-[#d61717]" />
                 </div>
-                <div className="text-[11px] font-semibold italic text-[#d61717]">
-                  O saboooor da Pizza
+
+                <div className="mt-1 flex items-center gap-1 text-[11px] font-semibold text-[#767676]">
+                  <MapPin className="h-3.5 w-3.5 text-[#d61717]" />
+                  <span className="truncate">{storeName}</span>
                 </div>
               </div>
-            </div>
+            </button>
 
-            <Link
-              href="/m/checkout"
-              className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#eadfda] bg-white shadow-sm"
-            >
-              <span className="text-base leading-none">🛒</span>
-              {cartCount > 0 ? (
-                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#ff1010] px-1 text-[10px] font-black text-white">
-                  {cartCount}
-                </span>
-              ) : null}
-            </Link>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                aria-label="Notificações"
+                className="relative grid h-11 w-11 place-items-center rounded-[16px] border border-[#eee2dc] bg-white text-[#363636] shadow-sm transition active:scale-95"
+              >
+                <Bell className="h-5 w-5" />
+                <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#ff201c] ring-2 ring-white" />
+              </button>
+
+              <Link
+                href="/m/carrinho"
+                aria-label="Abrir carrinho"
+                className="relative grid h-11 w-11 place-items-center rounded-[16px] bg-[#171717] text-white shadow-[0_8px_20px_rgba(0,0,0,0.18)] transition active:scale-95"
+              >
+                <ShoppingBag className="h-5 w-5" />
+
+                {cartCount > 0 ? (
+                  <span className="absolute -right-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-[#ff201c] px-1 text-[10px] font-black text-white ring-2 ring-[#f7f1ef]">
+                    {cartCount}
+                  </span>
+                ) : null}
+              </Link>
+            </div>
           </div>
         </header>
 
-        <div className="mb-3 rounded-2xl border border-[#eadfda] bg-white px-4 py-3 text-xs font-bold text-[#555] shadow-sm">
-          Loja atual: <span className="text-[#ff1010]">{storeName}</span>
-        </div>
+        <section className="mb-4">
+          <label className="flex items-center gap-3 rounded-[20px] border border-[#eee3de] bg-white px-4 py-3.5 shadow-[0_8px_24px_rgba(50,30,20,0.05)] transition focus-within:border-[#ff2a1f]/40 focus-within:ring-4 focus-within:ring-[#ff2a1f]/5">
+            <Search className="h-5 w-5 shrink-0 text-[#d61717]" />
 
-        <div className="mb-5 rounded-full border border-[#ece3df] bg-white px-4 py-3 text-sm text-[#9b9b9b] shadow-sm">
-          🔎 Buscar pizza, bebida ou sobremesa...
-        </div>
+            <input
+              type="search"
+              placeholder="Buscar pizza, bebida ou sobremesa"
+              className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-[#222] outline-none placeholder:text-[#9a918d]"
+            />
+          </label>
+        </section>
 
         <section className="mb-6">
-          <div className="relative overflow-hidden rounded-[24px] bg-gradient-to-br from-[#15171d] to-[#323846] p-5 text-white shadow-xl">
-            <span className="rounded-full bg-[#ff1010] px-3 py-1 text-[10px] font-bold">
-              {slide.tag}
-            </span>
+          <div className="relative isolate overflow-hidden rounded-[28px] bg-[#171717] px-5 py-6 text-white shadow-[0_18px_45px_rgba(21,12,10,0.22)]">
+            <div className="absolute -right-12 -top-16 h-48 w-48 rounded-full bg-[#ff271d]/35 blur-2xl" />
+            <div className="absolute -bottom-20 left-10 h-40 w-40 rounded-full bg-[#ff9b32]/20 blur-3xl" />
 
-            <h1 className="mt-3 text-[22px] font-black leading-tight">
-              {slide.title}
-            </h1>
+            <div className="relative z-10 max-w-[75%]">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-white backdrop-blur">
+                <Star className="h-3.5 w-3.5 fill-[#ffc354] text-[#ffc354]" />
+                {slide.tag}
+              </span>
 
-            <p className="mt-2 text-xs leading-relaxed text-white/80">
-              {slide.description}
-            </p>
+              <h1 className="mt-4 text-[25px] font-black leading-[1.08] tracking-[-0.03em]">
+                {slide.title}
+              </h1>
 
-            <button
-              type="button"
-              className="mt-4 rounded-full bg-[#ff1010] px-5 py-2.5 text-sm font-black text-white"
-            >
-              {slide.cta}
-            </button>
+              <p className="mt-3 text-xs font-medium leading-relaxed text-white/72">
+                {slide.description}
+              </p>
+
+              <button
+                type="button"
+                className="mt-5 rounded-[14px] bg-gradient-to-r from-[#ff2c20] to-[#dc0718] px-5 py-3 text-xs font-black text-white shadow-[0_10px_22px_rgba(255,37,30,0.28)] transition active:scale-95"
+              >
+                {slide.cta}
+              </button>
+            </div>
+
+            <div className="absolute bottom-5 right-5 grid h-20 w-20 place-items-center rounded-full border border-white/10 bg-white/5 text-5xl shadow-inner backdrop-blur">
+              🍕
+            </div>
+
+            <div className="absolute bottom-4 right-[105px] flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-bold text-white/85 backdrop-blur">
+              <Clock3 className="h-3 w-3" />
+              30–45 min
+            </div>
+          </div>
+
+          <div className="mt-3 flex justify-center gap-1.5">
+            {heroSlides.map((_, index) => (
+              <button
+                key={index}
+                type="button"
+                onClick={() => setActiveSlide(index)}
+                aria-label={`Abrir oferta ${index + 1}`}
+                className={[
+                  "h-1.5 rounded-full transition-all",
+                  index === activeSlide
+                    ? "w-7 bg-[#d61717]"
+                    : "w-1.5 bg-[#d9ceca]",
+                ].join(" ")}
+              />
+            ))}
           </div>
         </section>
 
         {mobileCategories.length > 0 ? (
-          <section className="mb-6">
-            <div className="grid grid-cols-4 gap-3">
+          <section className="mb-7">
+            <div className="mb-4 flex items-end justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#d61717]">
+                  Cardápio
+                </p>
+                <h2 className="mt-1 text-[20px] font-black tracking-[-0.03em] text-[#171717]">
+                  Escolha uma categoria
+                </h2>
+              </div>
+
+              <span className="text-[11px] font-bold text-[#89817e]">
+                {displayProducts.length} produtos
+              </span>
+            </div>
+
+            <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {mobileCategories.map((cat) => {
                 const selected = activeCategory?.id === cat.id;
 
@@ -486,26 +568,36 @@ export default function MobileAppPage() {
                     key={cat.id}
                     type="button"
                     onClick={() => selectCategory(cat.id)}
-                    className="text-center transition active:scale-95"
+                    className={[
+                      "flex min-w-[92px] shrink-0 flex-col items-center rounded-[22px] border px-3 py-4 text-center shadow-sm transition active:scale-95",
+                      selected
+                        ? "border-[#d61717] bg-[#d61717] text-white shadow-[0_12px_26px_rgba(214,23,23,0.22)]"
+                        : "border-[#eee3de] bg-white text-[#262626]",
+                    ].join(" ")}
                   >
-                    <div
+                    <span
                       className={[
-                        "mx-auto flex h-12 w-12 items-center justify-center rounded-full shadow-sm transition",
+                        "grid h-12 w-12 place-items-center rounded-[17px] text-2xl transition",
                         selected
-                          ? "scale-110 bg-[#ff1010] text-white ring-4 ring-[#ff1010]/15"
-                          : "bg-white text-[#ff1010] ring-1 ring-[#eadfda]",
+                          ? "bg-white/15"
+                          : "bg-[#fff2ed]",
                       ].join(" ")}
                     >
                       {cat.icon}
-                    </div>
-                    <div
+                    </span>
+
+                    <span className="mt-2.5 text-[11px] font-black">
+                      {cat.shortName}
+                    </span>
+
+                    <span
                       className={[
-                        "mt-2 text-[11px] font-bold transition",
-                        selected ? "text-[#ff1010]" : "text-[#171717]",
+                        "mt-1 text-[9px] font-bold",
+                        selected ? "text-white/70" : "text-[#9b918d]",
                       ].join(" ")}
                     >
-                      {cat.shortName}
-                    </div>
+                      {cat.products.length} itens
+                    </span>
                   </button>
                 );
               })}
