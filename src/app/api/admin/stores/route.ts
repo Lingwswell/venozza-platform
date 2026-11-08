@@ -19,42 +19,26 @@ function normalizeRole(role: string | null | undefined): AdminRole {
 
 export async function GET(req: Request) {
   try {
-    let auth: AuthContext = {};
+    let auth: AuthContext;
 
     try {
       auth = await getAuthContextFromRequest(req);
-    } catch (authError) {
-      console.warn("[api/admin/stores][auth fallback]", authError);
-      auth = {};
+    } catch {
+      return NextResponse.json(
+        { ok: false, error: "Sessão inválida. Entre novamente." },
+        { status: 401 }
+      );
     }
 
-    const headerTenantId = req.headers.get("x-tenant-id");
-    const headerStoreId = req.headers.get("x-store-id");
-    const headerRole = normalizeRole(req.headers.get("x-user-role"));
-
-    const authRole = normalizeRole(auth.role);
-
-    const tenantId = auth.tenantId || headerTenantId;
-    const storeId = auth.storeId || headerStoreId;
-
-    const role =
-      authRole !== "customer"
-        ? authRole
-        : headerRole !== "customer"
-          ? headerRole
-          : authRole;
+    const tenantId = auth.tenantId;
+    const storeId = auth.storeId;
+    const role = normalizeRole(auth.role);
 
     if (!tenantId) {
       return NextResponse.json(
         {
           ok: false,
           error: "tenantId obrigatório",
-          debug: {
-            authRole,
-            headerRole,
-            hasAuthTenantId: Boolean(auth.tenantId),
-            hasHeaderTenantId: Boolean(headerTenantId),
-          },
         },
         { status: 400 }
       );
