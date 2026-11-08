@@ -7,7 +7,7 @@ export async function GET(
   context: { params: Promise<{ codigo: string }> }
 ) {
   try {
-    if (!rateLimit(`order-lookup:${clientKey(req)}`, 120, 60 * 1000)) {
+    if (!rateLimit(`order-lookup:${clientKey(req)}`, 1200, 60 * 1000)) {
       return NextResponse.json(
         { ok: false, error: "Muitas consultas. Tente novamente em instantes." },
         { status: 429 }

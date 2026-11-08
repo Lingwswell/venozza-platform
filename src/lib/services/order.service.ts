@@ -1,5 +1,11 @@
 import { randomInt } from "node:crypto";
 import { AppError } from "@/lib/api/errors";
+import {
+  pizzaBorderOptions,
+  pizzaDoughOptions,
+  pizzaExtraDrinkOptions,
+  pizzaSizeOptions,
+} from "@/lib/product-customizations";
 import { OrderRepository } from "@/lib/repositories/order.repository";
 import { prisma } from "@/lib/db";
 import { validateCreateOrder } from "@/lib/validators/order.validator";
@@ -166,6 +172,167 @@ function getCustomizationPriceDeltaCents(
   return 0;
 }
 
+const HALF_HALF_PREFIX = "half-half-";
+const HALF_HALF_NAME = "Pizza Meio a Meio 40cm";
+
+function findExactOption<T extends { name: string }>(
+  options: T[],
+  value: string
+): T | undefined {
+  const wanted = normalizeText(value);
+  return options.find((option) => normalizeText(option.name) === wanted);
+}
+
+async function loadHalfHalfFlavor(
+  flavorId: string,
+  storeId: string,
+  qty: number
+): Promise<{ name: string; priceCents: number }> {
+  const productStore = await prisma.productStore.findUnique({
+    where: {
+      productId_storeId: {
+        productId: flavorId,
+        storeId,
+      },
+    },
+    select: {
+      available: true,
+      stock: true,
+      price_cents: true,
+      product: {
+        select: {
+          name: true,
+          price_cents: true,
+          available: true,
+          category: true,
+        },
+      },
+    },
+  });
+
+  if (!productStore) {
+    throw new AppError("Sabor indisponível ou inválido para esta loja.", 400);
+  }
+
+  const name = productStore.product.name || "Sabor";
+
+  if (!productStore.available || !productStore.product.available) {
+    throw new AppError(`Sabor indisponível para esta loja: ${name}.`, 400);
+  }
+
+  if (!normalizeText(String(productStore.product.category || "")).includes("pizza")) {
+    throw new AppError(`${name} não pode ser usado no meio a meio.`, 400);
+  }
+
+  const stock = Number(productStore.stock ?? 0);
+
+  if (stock <= 0 || qty > stock) {
+    throw new AppError(`Estoque insuficiente para ${name}.`, 400);
+  }
+
+  const priceCents =
+    typeof productStore.price_cents === "number"
+      ? productStore.price_cents
+      : productStore.product.price_cents;
+
+  if (!Number.isFinite(priceCents) || priceCents <= 0) {
+    throw new AppError("Preço do sabor inválido para esta loja.", 400);
+  }
+
+  return { name, priceCents };
+}
+
+async function priceHalfHalfItem(
+  item: CreateOrderItemInput,
+  productId: string,
+  qty: number,
+  storeId: string
+): Promise<CreateOrderItemInput> {
+  const flavorIds = productId
+    .slice(HALF_HALF_PREFIX.length)
+    .split("-")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (flavorIds.length !== 2 || flavorIds[0] === flavorIds[1]) {
+    throw new AppError("Pizza meio a meio precisa de 2 sabores diferentes.", 400);
+  }
+
+  const flavors: Array<{ name: string; priceCents: number }> = [];
+
+  for (const flavorId of flavorIds) {
+    flavors.push(await loadHalfHalfFlavor(flavorId, storeId, qty));
+  }
+
+  const addons = Array.isArray(item.addons) ? item.addons : [];
+
+  const crustName = String(item.crust || "").trim();
+  const border = crustName
+    ? findExactOption(pizzaBorderOptions, crustName)
+    : pizzaBorderOptions[0];
+
+  if (!border) {
+    throw new AppError("Borda inválida.", 400);
+  }
+
+  const doughAddon = addons.find((addon) =>
+    normalizeText(addon).startsWith("massa:")
+  );
+  const doughName = doughAddon
+    ? doughAddon.slice(doughAddon.indexOf(":") + 1).trim()
+    : "";
+  const dough = doughName
+    ? findExactOption(pizzaDoughOptions, doughName)
+    : pizzaDoughOptions[0];
+
+  if (!dough) {
+    throw new AppError("Massa inválida.", 400);
+  }
+
+  const drinkLines: string[] = [];
+  let drinksCents = 0;
+
+  for (const addon of addons) {
+    const match = addon.trim().match(/^(\d{1,2})\s*x\s+(.+)$/i);
+    if (!match) continue;
+
+    const drinkQty = Number(match[1]);
+    const drink = findExactOption(pizzaExtraDrinkOptions, match[2]);
+
+    if (!drink || drinkQty <= 0) {
+      throw new AppError("Bebida inválida no pedido.", 400);
+    }
+
+    drinksCents += drink.price_cents * drinkQty;
+    drinkLines.push(`${drinkQty}x ${drink.name}`);
+  }
+
+  const size40 = pizzaSizeOptions.find((option) => option.id === "40cm");
+  const sizeName = size40?.name ?? "Pizza Família - 40cm";
+  const sizeDeltaCents = size40?.price_delta_cents ?? 0;
+
+  const baseCents = Math.max(...flavors.map((flavor) => flavor.priceCents));
+
+  return {
+    ...item,
+    id: productId,
+    name: HALF_HALF_NAME,
+    quantity: qty,
+    price_cents:
+      baseCents + sizeDeltaCents + border.price_cents + dough.price_cents + drinksCents,
+    size: sizeName,
+    crust: border.name,
+    flavorIds,
+    addons: [
+      `Meio a meio: ${flavors.map((flavor) => flavor.name).join(" / ")}`,
+      `Tamanho: ${sizeName}`,
+      `Borda: ${border.name}`,
+      `Massa: ${dough.name}`,
+      ...drinkLines,
+    ],
+  };
+}
+
 async function normalizeItemsWithDBPrice(
   items: CreateOrderItemInput[],
   storeId: string
@@ -187,6 +354,13 @@ async function normalizeItemsWithDBPrice(
 
     if (!productId) {
       throw new AppError("Produto inválido no pedido.", 400);
+    }
+
+    if (productId.startsWith(HALF_HALF_PREFIX)) {
+      normalizedItems.push(
+        await priceHalfHalfItem(item, productId, qty, storeId)
+      );
+      continue;
     }
 
     const productStore = await prisma.productStore.findUnique({

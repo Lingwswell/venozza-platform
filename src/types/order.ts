@@ -13,6 +13,7 @@ export type CartItem = {
 };
 
 export type CreateOrderItemInput = {
+  flavorIds?: string[];
   id: string | number;
   name: string;
   quantity: number;

@@ -105,6 +105,37 @@ export class OrderRepository {
           throw new AppError("Item inválido para baixa de estoque.", 400);
         }
 
+        const flavorIds = (item as unknown as { flavorIds?: string[] }).flavorIds;
+
+        if (flavorIds && flavorIds.length > 0) {
+          for (const flavorId of flavorIds) {
+            const flavorUpdate = await tx.productStore.updateMany({
+              where: {
+                productId: flavorId,
+                storeId: input.storeId,
+                stock: {
+                  gte: quantity,
+                },
+                available: true,
+              },
+              data: {
+                stock: {
+                  decrement: quantity,
+                },
+              },
+            });
+
+            if (flavorUpdate.count !== 1) {
+              throw new AppError(
+                `Estoque insuficiente para ${item.name || "produto"}.`,
+                400
+              );
+            }
+          }
+
+          continue;
+        }
+
         const stockUpdate = await tx.productStore.updateMany({
           where: {
             productId,
@@ -146,7 +177,7 @@ export class OrderRepository {
 
           items: {
             create: (input.items || []).map((item) => ({
-              productId: typeof item.id !== "undefined" && item.id !== null ? String(item.id) : null,
+              productId: (item as unknown as { flavorIds?: string[] }).flavorIds?.length ? null : typeof item.id !== "undefined" && item.id !== null ? String(item.id) : null,
               name: item.name,
               quantity: Number(item.quantity || 0),
               price_cents: Number(item.price_cents || 0),
