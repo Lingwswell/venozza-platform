@@ -18,7 +18,10 @@ type JwtPayloadShape = {
   storeId?: string | null;
 };
 
-export async function getAuthContextFromRequest(req: Request): Promise<AuthContext> {
+export async function getAuthContextFromRequest(
+  req: Request,
+  options: { allowPublic?: boolean } = {}
+): Promise<AuthContext> {
   const authHeader = req.headers.get("authorization");
   const roleHeader = req.headers.get("x-user-role");
   const tenantHeader = req.headers.get("x-tenant-id");
@@ -26,7 +29,8 @@ export async function getAuthContextFromRequest(req: Request): Promise<AuthConte
 
   if (authHeader?.startsWith("Bearer ")) {
     const token = authHeader.slice(7).trim();
-    const secret = process.env.JWT_SECRET || "venozza-dev-secret";
+    const secret = process.env.JWT_SECRET;
+    if (!secret) throw new Error("JWT_SECRET não configurado");
 
     const payload = jwt.verify(token, secret) as JwtPayloadShape;
 
@@ -71,12 +75,12 @@ export async function getAuthContextFromRequest(req: Request): Promise<AuthConte
 
   // Fluxo público/mobile: loja identificada pelos headers.
   // Headers nunca concedem papel administrativo.
-  if (storeHeader) {
+  if (options.allowPublic && storeHeader) {
     return {
       userId: "public-client",
       email: "public@venozza",
       role: "customer",
-      tenantId: tenantHeader || null,
+      tenantId: null,
       storeId: storeHeader,
     };
   }

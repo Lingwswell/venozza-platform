@@ -36,7 +36,8 @@ export async function POST(req: Request) {
       );
     }
 
-    const secret = process.env.JWT_SECRET || "venozza-dev-secret";
+    const secret = process.env.JWT_SECRET;
+    if (!secret) throw new Error("JWT_SECRET não configurado");
 
     const token = jwt.sign(
       {
