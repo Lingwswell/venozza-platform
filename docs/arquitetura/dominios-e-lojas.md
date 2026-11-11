@@ -49,3 +49,16 @@ Nova loja pode copiar o cardápio de outra loja da rede.
 - O raio de entrega só informa ("fora da área"); o checkout ainda não bloqueia por endereço,
   porque o endereço do pedido é texto livre (sem coordenadas).
 - Tela "Redes" do super_admin para cadastrar redes e domínios.
+
+## CEP automático
+
+No cadastro da loja, ao digitar o CEP o admin chama `/api/admin/address-lookup`, que busca
+rua/bairro/cidade/UF no ViaCEP e a localização no OpenStreetMap (Nominatim). Ao preencher o
+número, a localização é refinada. O servidor precisa de acesso à internet para isso.
+
+## Publicar uma versão
+
+```
+bash scripts/deploy.sh
+```
+Faz backup, migrations, prisma generate, build e reinicia o `venozza-web`.

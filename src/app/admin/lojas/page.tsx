@@ -91,6 +91,8 @@ export default function LojasPage() {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [locating, setLocating] = useState(false);
+  const [lookupMessage, setLookupMessage] = useState("");
+  const [lookingUp, setLookingUp] = useState(false);
 
   const canManage = role === "owner" || role === "super_admin";
 
@@ -118,9 +120,76 @@ export default function LojasPage() {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
+  // Busca endereco + coordenadas pelo CEP. Com numero, refina a localizacao.
+  async function lookupByCep(cepValue: string, number: string, street: string, fillAddress: boolean) {
+    const cep = cepValue.replace(/\D/g, "");
+    if (cep.length !== 8) return;
+
+    setLookingUp(true);
+    setLookupMessage("Buscando endereço...");
+    try {
+      const params = new URLSearchParams({ cep });
+      if (number.trim()) params.set("number", number.trim());
+      if (!fillAddress && street.trim()) params.set("street", street.trim());
+
+      const res = await fetchWithAuth(`/api/admin/address-lookup?${params.toString()}`);
+      const data = await res.json();
+      if (!res.ok || !data?.ok) throw new Error(data?.error || "CEP não encontrado.");
+
+      const a = data.address as {
+        zipCode: string;
+        street: string | null;
+        neighborhood: string | null;
+        city: string | null;
+        state: string | null;
+        latitude: number | null;
+        longitude: number | null;
+        precision: "number" | "street" | "zip" | null;
+      };
+
+      setForm((current) => ({
+        ...current,
+        zipCode: a.zipCode,
+        ...(fillAddress
+          ? {
+              addressStreet: a.street || current.addressStreet,
+              addressNeighborhood: a.neighborhood || current.addressNeighborhood,
+              city: a.city || current.city,
+              state: a.state || current.state,
+            }
+          : {}),
+        coordinates:
+          a.latitude !== null && a.longitude !== null ? `${a.latitude}, ${a.longitude}` : current.coordinates,
+      }));
+
+      setLookupMessage(
+        a.precision === "number"
+          ? "Endereço e localização encontrados pelo número. Confira no mapa."
+          : a.precision === "street"
+            ? "Localização encontrada pela rua. Preencha o número para ficar mais precisa."
+            : a.precision === "zip"
+              ? "Localização aproximada (bairro). Preencha o número ou ajuste no mapa."
+              : "Endereço preenchido, mas a localização não foi encontrada. Cole as coordenadas do Google Maps."
+      );
+    } catch (err) {
+      setLookupMessage(err instanceof Error ? err.message : "Não foi possível buscar o CEP.");
+    } finally {
+      setLookingUp(false);
+    }
+  }
+
+  function onCepChange(value: string) {
+    update("zipCode", value);
+    const digits = value.replace(/\D/g, "");
+    if (digits.length === 8 && digits !== form.zipCode.replace(/\D/g, "")) {
+      lookupByCep(digits, form.addressNumber, "", true);
+    }
+  }
+
   function startEdit(store: AdminStore) {
     setEditingId(store.id);
     setForm(toForm(store));
+    setLookupMessage("");
     setError("");
     setSuccess("");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -128,6 +197,7 @@ export default function LojasPage() {
 
   function startCreate() {
     setEditingId("new");
+    setLookupMessage("");
     setForm({ ...EMPTY_FORM, copyFromStoreId: stores.find((s) => s.active)?.id || "" });
     setError("");
     setSuccess("");
@@ -240,26 +310,44 @@ export default function LojasPage() {
             </h3>
 
             <div className="mt-4 grid gap-4 md:grid-cols-6">
-              <label className="md:col-span-3">
+              <label className="md:col-span-5">
                 <span className="mb-1 block text-xs font-bold uppercase text-slate-500">Nome</span>
                 <input value={form.name} onChange={(e) => update("name", e.target.value)} placeholder="Ex.: VenoZza Centro" className={inputClass} />
-              </label>
-              <label className="md:col-span-2">
-                <span className="mb-1 block text-xs font-bold uppercase text-slate-500">CEP</span>
-                <input value={form.zipCode} onChange={(e) => update("zipCode", e.target.value)} className={inputClass} />
               </label>
               <label className="flex items-end gap-2 pb-3 md:col-span-1">
                 <input type="checkbox" checked={form.active} onChange={(e) => update("active", e.target.checked)} />
                 <span className="text-sm font-bold text-slate-800">Ativa</span>
               </label>
 
-              <label className="md:col-span-4">
-                <span className="mb-1 block text-xs font-bold uppercase text-slate-500">Rua</span>
-                <input value={form.addressStreet} onChange={(e) => update("addressStreet", e.target.value)} className={inputClass} />
+              <label className="md:col-span-2">
+                <span className="mb-1 block text-xs font-bold uppercase text-slate-500">CEP</span>
+                <input
+                  value={form.zipCode}
+                  onChange={(e) => onCepChange(e.target.value)}
+                  inputMode="numeric"
+                  placeholder="Digite o CEP"
+                  className={inputClass}
+                />
               </label>
               <label className="md:col-span-1">
                 <span className="mb-1 block text-xs font-bold uppercase text-slate-500">Número</span>
-                <input value={form.addressNumber} onChange={(e) => update("addressNumber", e.target.value)} className={inputClass} />
+                <input
+                  value={form.addressNumber}
+                  onChange={(e) => update("addressNumber", e.target.value)}
+                  onBlur={() =>
+                    form.addressNumber.trim() &&
+                    lookupByCep(form.zipCode, form.addressNumber, form.addressStreet, false)
+                  }
+                  className={inputClass}
+                />
+              </label>
+              <p className="self-end pb-3 text-xs font-semibold text-slate-500 md:col-span-3">
+                {lookingUp ? "Buscando..." : lookupMessage || "O CEP preenche o endereço e a localização sozinho."}
+              </p>
+
+              <label className="md:col-span-5">
+                <span className="mb-1 block text-xs font-bold uppercase text-slate-500">Rua</span>
+                <input value={form.addressStreet} onChange={(e) => update("addressStreet", e.target.value)} className={inputClass} />
               </label>
               <label className="md:col-span-1">
                 <span className="mb-1 block text-xs font-bold uppercase text-slate-500">Compl.</span>
@@ -281,7 +369,7 @@ export default function LojasPage() {
 
               <label className="md:col-span-4">
                 <span className="mb-1 block text-xs font-bold uppercase text-slate-500">
-                  Coordenadas (latitude, longitude)
+                  Localização (preenchida pelo CEP — ajuste se precisar)
                 </span>
                 <input
                   value={form.coordinates}
@@ -290,7 +378,7 @@ export default function LojasPage() {
                   className={inputClass}
                 />
                 <span className="mt-1 block text-xs text-slate-500">
-                  No Google Maps: botão direito em cima da loja → clique na primeira linha (copia) → cole aqui.
+                  Para corrigir: no Google Maps, botão direito em cima da loja → clique na primeira linha (copia) → cole aqui.
                   {coords ? (
                     <>
                       {" "}
