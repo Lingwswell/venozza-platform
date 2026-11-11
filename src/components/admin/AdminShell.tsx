@@ -16,6 +16,7 @@ const menu = [
   { href: "/admin/pedidos", label: "Pedidos", icon: "🧾" },
   { href: "/admin/kds", label: "KDS", icon: "🍳" },
   { href: "/admin/produtos", label: "Produtos", icon: "🍕" },
+  { href: "/admin/opcoes", label: "Opções", icon: "🧩" },
   { href: "/admin/lojas", label: "Lojas", icon: "🏬" },
   { href: "/admin/financeiro", label: "Financeiro", icon: "💰" },
   { href: "/admin/clientes", label: "Clientes", icon: "👥" },

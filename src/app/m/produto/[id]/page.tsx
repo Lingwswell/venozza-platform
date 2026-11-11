@@ -5,15 +5,10 @@ import { useParams, useRouter } from "next/navigation";
 import { addToCart } from "@/lib/cart-storage";
 import { formatMoneyFromCents } from "@/lib/utils/formatters";
 import {
-  pizzaSizeOptions as sizeOptions,
-  pizzaBorderOptions as borderOptions,
-  pizzaDoughOptions as doughOptions,
-  pizzaExtraDrinkOptions as drinkOptions,
-  potatoSizeOptions,
-  potatoFillingOptions,
-  type CustomizationOptionItem as OptionItem,
-  type PizzaSizeOption,
-} from "@/lib/product-customizations";
+  useOptionCatalog,
+  pickOption,
+  type CatalogOption as OptionItem,
+} from "@/lib/use-option-catalog";
 import {
   getMobileStoreContext,
   getMobileStoreHeaders,
@@ -335,10 +330,10 @@ export default function MobileProductPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [selectedSizeId, setSelectedSizeId] = useState<PizzaSizeOption["id"]>("35cm");
-  const [selectedPotatoSizeId, setSelectedPotatoSizeId] = useState("batata-pequena");
-  const [selectedBorderId, setSelectedBorderId] = useState("sem-borda");
-  const [selectedDoughId, setSelectedDoughId] = useState("massa-tradicional");
+  const [selectedSizeId, setSelectedSizeId] = useState("");
+  const [selectedPotatoSizeId, setSelectedPotatoSizeId] = useState("");
+  const [selectedBorderId, setSelectedBorderId] = useState("");
+  const [selectedDoughId, setSelectedDoughId] = useState("");
   const [drinkQuantities, setDrinkQuantities] = useState<Record<string, number>>({});
   const [selectedBeverageVariantId, setSelectedBeverageVariantId] = useState("");
   const [selectedBeverageType, setSelectedBeverageType] = useState("");
@@ -346,6 +341,12 @@ export default function MobileProductPage() {
   const [selectedBeverageSize, setSelectedBeverageSize] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [note, setNote] = useState("");
+
+  const { catalog, loading: catalogLoading, error: catalogError } = useOptionCatalog();
+  const sizeOptions = catalog.pizzaSizes;
+  const doughOptions = catalog.pizzaDoughs;
+  const drinkOptions = catalog.pizzaDrinks;
+  const potatoSizeOptions = catalog.potatoSizes;
 
   const product = useMemo(() => {
     return products.find((item) => String(item.id) === productId) || null;
@@ -403,10 +404,10 @@ export default function MobileProductPage() {
       (normalizedCustomizationType === "auto" && inferredPizza)
     );
 
-  const customizationOptions = isBatata
-    ? potatoFillingOptions
+  const customizationOptions: OptionItem[] = isBatata
+    ? catalog.potatoFillings
     : isPizza
-      ? borderOptions
+      ? catalog.pizzaBorders
       : [];
 
   const beverageGroupName = product && isDrink ? getBeverageGroupName(product) : "";
@@ -532,27 +533,20 @@ export default function MobileProductPage() {
   ]);
 
   const selectedSize = useMemo(() => {
-    return sizeOptions.find((item) => item.id === selectedSizeId) || sizeOptions[1];
-  }, [selectedSizeId]);
+    return pickOption(sizeOptions, selectedSizeId);
+  }, [sizeOptions, selectedSizeId]);
 
   const selectedPotatoSize = useMemo(() => {
-    return (
-      potatoSizeOptions.find((item) => item.id === selectedPotatoSizeId) ||
-      potatoSizeOptions[0]
-    );
-  }, [selectedPotatoSizeId]);
+    return pickOption(potatoSizeOptions, selectedPotatoSizeId);
+  }, [potatoSizeOptions, selectedPotatoSizeId]);
 
   const selectedCustomization = useMemo(() => {
-    return (
-      customizationOptions.find((item) => item.id === selectedBorderId) ||
-      customizationOptions[0] ||
-      { id: "sem-complemento", name: "Sem complemento", price_cents: 0 }
-    );
+    return pickOption(customizationOptions, selectedBorderId);
   }, [customizationOptions, selectedBorderId]);
 
   const selectedDough = useMemo(() => {
-    return doughOptions.find((item) => item.id === selectedDoughId) || doughOptions[0];
-  }, [selectedDoughId]);
+    return pickOption(doughOptions, selectedDoughId);
+  }, [doughOptions, selectedDoughId]);
 
   const selectedDrinks = useMemo(() => {
     return drinkOptions
@@ -561,7 +555,7 @@ export default function MobileProductPage() {
         quantity: Number(drinkQuantities[drink.id] || 0),
       }))
       .filter((drink) => drink.quantity > 0);
-  }, [drinkQuantities]);
+  }, [drinkOptions, drinkQuantities]);
 
   const basePriceCents =
     isDrink && selectedBeverageVariant
@@ -571,7 +565,7 @@ export default function MobileProductPage() {
         : 0;
 
   const selectedSizeBasePriceCents = useMemo(() => {
-    return Math.max(0, basePriceCents + Number(selectedSize.price_delta_cents || 0));
+    return Math.max(0, basePriceCents + Number(selectedSize.price_cents || 0));
   }, [basePriceCents, selectedSize]);
 
   const unitTotalCents = useMemo(() => {
@@ -579,7 +573,9 @@ export default function MobileProductPage() {
       return sum + drink.price_cents * drink.quantity;
     }, 0);
 
-    const productBasePriceCents = isPizza ? selectedSizeBasePriceCents : basePriceCents;
+    const productBasePriceCents = isPizza
+      ? basePriceCents + Number(selectedSize.price_cents || 0)
+      : basePriceCents;
 
     return Math.max(
       0,
@@ -593,7 +589,7 @@ export default function MobileProductPage() {
     isPizza,
     isBatata,
     basePriceCents,
-    selectedSizeBasePriceCents,
+    selectedSize,
     selectedPotatoSize,
     selectedCustomization,
     selectedDough,
@@ -696,7 +692,7 @@ export default function MobileProductPage() {
     router.push("/m/carrinho");
   }
 
-  if (loading) {
+  if (loading || ((isPizza || isBatata) && catalogLoading)) {
     return (
       <main className="min-h-screen bg-[#f7f1ef] px-4 py-6 text-[#171717]">
         <p className="text-sm font-bold text-[#777]">Carregando produto...</p>
@@ -718,6 +714,22 @@ export default function MobileProductPage() {
         <p className="mt-2 text-sm text-[#777]">
           {error || "Esse produto não está disponível no momento."}
         </p>
+      </main>
+    );
+  }
+
+  if ((isPizza || isBatata) && catalogError) {
+    return (
+      <main className="min-h-screen bg-[#f7f1ef] px-4 py-6 text-[#171717]">
+        <button
+          onClick={() => router.back()}
+          className="mb-6 rounded-full border border-[#eadfda] bg-white px-4 py-2 text-sm font-black text-[#555]"
+        >
+          Voltar
+        </button>
+
+        <h1 className="text-xl font-black">Não foi possível carregar as opções</h1>
+        <p className="mt-2 text-sm text-[#777]">{catalogError}</p>
       </main>
     );
   }
@@ -808,14 +820,16 @@ export default function MobileProductPage() {
                 >
                   <div>
                     <p className="text-sm font-black text-[#171717]">{option.name}</p>
-                    <p className="mt-1 text-xs text-[#777]">{option.description}</p>
+                    {option.description ? (
+                      <p className="mt-1 text-xs text-[#777]">{option.description}</p>
+                    ) : null}
                   </div>
 
                   <div className="text-right text-xs font-black text-[#ff1010]">
-                    {option.price_delta_cents > 0
-                      ? `+ ${formatMoneyFromCents(option.price_delta_cents)}`
-                      : option.price_delta_cents < 0
-                        ? `- ${formatMoneyFromCents(Math.abs(option.price_delta_cents))}`
+                    {option.price_cents > 0
+                      ? `+ ${formatMoneyFromCents(option.price_cents)}`
+                      : option.price_cents < 0
+                        ? `- ${formatMoneyFromCents(Math.abs(option.price_cents))}`
                         : "Base"}
                   </div>
                 </button>

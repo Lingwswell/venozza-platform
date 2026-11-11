@@ -6,12 +6,11 @@ import { useRouter } from "next/navigation";
 import { addToCart } from "@/lib/cart-storage";
 import { formatMoneyFromCents } from "@/lib/utils/formatters";
 import {
-  pizzaBorderOptions as borderOptions,
-  pizzaDoughOptions as doughOptions,
-  pizzaExtraDrinkOptions as drinkOptions,
-  pizzaSizeOptions,
-  type CustomizationOptionItem as OptionItem,
-} from "@/lib/product-customizations";
+  useOptionCatalog,
+  pickOption,
+  findFamilySize,
+  type CatalogOption as OptionItem,
+} from "@/lib/use-option-catalog";
 import {
   getMobileStoreContext,
   getMobileStoreHeaders,
@@ -31,9 +30,6 @@ type Product = {
   available?: boolean;
   storeId?: string | null;
 };
-
-const SIZE_40_EXTRA_CENTS =
-  pizzaSizeOptions.find((option) => option.id === "40cm")?.price_delta_cents || 0;
 
 function getProductPriceCents(product: Product): number {
   if (typeof product.price_cents === "number") return product.price_cents;
@@ -149,14 +145,21 @@ export default function MeioAMeioPage() {
 
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedFlavorIds, setSelectedFlavorIds] = useState<string[]>([]);
-  const [selectedBorderId, setSelectedBorderId] = useState("sem-borda");
-  const [selectedDoughId, setSelectedDoughId] = useState("massa-tradicional");
+  const [selectedBorderId, setSelectedBorderId] = useState("");
+  const [selectedDoughId, setSelectedDoughId] = useState("");
   const [drinkQuantities, setDrinkQuantities] = useState<Record<string, number>>({});
   const [quantity, setQuantity] = useState(1);
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+
+  const { catalog, loading: catalogLoading, error: catalogError } = useOptionCatalog();
+  const borderOptions = catalog.pizzaBorders;
+  const doughOptions = catalog.pizzaDoughs;
+  const drinkOptions = catalog.pizzaDrinks;
+  const size40 = useMemo(() => findFamilySize(catalog.pizzaSizes), [catalog.pizzaSizes]);
+  const SIZE_40_EXTRA_CENTS = size40?.price_cents || 0;
 
   const selectedFlavors = useMemo(() => {
     return selectedFlavorIds
@@ -165,12 +168,12 @@ export default function MeioAMeioPage() {
   }, [products, selectedFlavorIds]);
 
   const selectedBorder = useMemo(() => {
-    return borderOptions.find((item) => item.id === selectedBorderId) || borderOptions[0];
-  }, [selectedBorderId]);
+    return pickOption(borderOptions, selectedBorderId);
+  }, [borderOptions, selectedBorderId]);
 
   const selectedDough = useMemo(() => {
-    return doughOptions.find((item) => item.id === selectedDoughId) || doughOptions[0];
-  }, [selectedDoughId]);
+    return pickOption(doughOptions, selectedDoughId);
+  }, [doughOptions, selectedDoughId]);
 
   const selectedDrinks = useMemo(() => {
     return drinkOptions
@@ -179,7 +182,7 @@ export default function MeioAMeioPage() {
         quantity: Number(drinkQuantities[drink.id] || 0),
       }))
       .filter((drink) => drink.quantity > 0);
-  }, [drinkQuantities]);
+  }, [drinkOptions, drinkQuantities]);
 
   const pizzaBaseCents = useMemo(() => {
     if (selectedFlavors.length === 0) return 0;
@@ -201,7 +204,7 @@ export default function MeioAMeioPage() {
       selectedDough.price_cents +
       drinksTotal
     );
-  }, [pizzaBaseCents, selectedBorder, selectedDough, selectedDrinks]);
+  }, [pizzaBaseCents, SIZE_40_EXTRA_CENTS, selectedBorder, selectedDough, selectedDrinks]);
 
   const finalTotalCents = unitTotalCents * quantity;
 
@@ -289,7 +292,7 @@ export default function MeioAMeioPage() {
 
     const addons = [
       `Meio a meio: ${flavorNames.join(" / ")}`,
-      "Tamanho: Pizza Família - 40cm",
+      `Tamanho: ${size40?.name || "Pizza Família - 40cm"}`,
       `Borda: ${selectedBorder.name}`,
       `Massa: ${selectedDough.name}`,
       ...selectedDrinks.map((drink) => `${drink.quantity}x ${drink.name}`),
@@ -304,7 +307,7 @@ export default function MeioAMeioPage() {
       note,
       addons,
       crust: selectedBorder.name,
-      size: "Pizza Família - 40cm",
+      size: size40?.name || "Pizza Família - 40cm",
       tenantId: mobileStore.tenantId,
       storeId: mobileStore.storeId,
     });
@@ -312,7 +315,7 @@ export default function MeioAMeioPage() {
     router.push("/m/carrinho");
   }
 
-  if (loading) {
+  if (loading || catalogLoading) {
     return (
       <main className="min-h-screen bg-[#f7f1ef] px-4 py-6 text-[#171717]">
         <p className="text-sm font-bold text-[#777]">Carregando sabores...</p>
@@ -320,7 +323,7 @@ export default function MeioAMeioPage() {
     );
   }
 
-  if (error) {
+  if (error || catalogError) {
     return (
       <main className="min-h-screen bg-[#f7f1ef] px-4 py-6 text-[#171717]">
         <Link
@@ -331,7 +334,7 @@ export default function MeioAMeioPage() {
         </Link>
 
         <h1 className="text-xl font-black">Não foi possível carregar</h1>
-        <p className="mt-2 text-sm text-[#777]">{error}</p>
+        <p className="mt-2 text-sm text-[#777]">{error || catalogError}</p>
       </main>
     );
   }
