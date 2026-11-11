@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type SyntheticEvent } from "react";
 import { ensureMobileStoreContext, setMobileStoreContext } from "@/lib/mobile-store-context";
 import type { OpenStatus, PaymentMethodKey } from "@/lib/store/settings-shared";
 
@@ -59,6 +59,14 @@ export const PRODUCT_PLACEHOLDER_IMAGE = "/images/placeholder-product.svg";
 
 export function productImage(product: { image?: string | null }) {
   return product.image || PRODUCT_PLACEHOLDER_IMAGE;
+}
+
+/** Se a foto do produto nao carregar (arquivo apagado, endereco errado), mostra a imagem padrao. */
+export function handleProductImageError(event: SyntheticEvent<HTMLImageElement>) {
+  const img = event.currentTarget;
+  if (!img.src.endsWith(PRODUCT_PLACEHOLDER_IMAGE)) {
+    img.src = PRODUCT_PLACEHOLDER_IMAGE;
+  }
 }
 
 export function formatDeliveryWindow(settings: CatalogStoreSettings) {

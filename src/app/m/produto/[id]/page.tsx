@@ -13,6 +13,7 @@ import {
   getMobileStoreContext,
   getMobileStoreHeaders,
 } from "@/lib/mobile-store-context";
+import { handleProductImageError } from "@/lib/catalog/use-store-catalog";
 
 type Product = {
   id: string | number;
@@ -756,7 +757,12 @@ export default function MobileProductPage() {
 
         <section className="overflow-hidden rounded-[28px] border border-[#eadfda] bg-white shadow-sm">
           {image ? (
-            <img src={image} alt={displayProductName} className="h-56 w-full object-cover" />
+            <img
+              src={image}
+              alt={displayProductName}
+              onError={handleProductImageError}
+              className="h-56 w-full object-cover"
+            />
           ) : (
             <div className="flex h-56 w-full items-center justify-center bg-[#fff4f0] text-sm font-bold text-[#999]">
               Sem imagem

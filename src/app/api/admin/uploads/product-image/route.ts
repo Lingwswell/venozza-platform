@@ -106,7 +106,9 @@ export async function POST(req: Request) {
     const tenantPrefix = sanitizeBaseName(auth.tenantId || "tenant");
     const fileName = `${tenantPrefix}-${baseName}-${Date.now()}.${extension}`;
 
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "products");
+    // Fora de public/: em producao (next start) o Next so serve o que estava em
+    // public/ na hora do build. Os arquivos daqui sao servidos por /media/[...path].
+    const uploadDir = path.join(process.cwd(), "storage", "uploads", "products");
     await mkdir(uploadDir, { recursive: true });
 
     const bytes = await file.arrayBuffer();
@@ -115,7 +117,7 @@ export async function POST(req: Request) {
     const filePath = path.join(uploadDir, fileName);
     await writeFile(filePath, buffer);
 
-    const url = `/uploads/products/${fileName}`;
+    const url = `/media/products/${fileName}`;
 
     return NextResponse.json({
       ok: true,

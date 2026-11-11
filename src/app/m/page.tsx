@@ -10,6 +10,7 @@ import { normalizeText } from "@/lib/catalog/category";
 import {
   formatDeliveryWindow,
   pickFeatured,
+  handleProductImageError,
   productImage,
   useStoreCatalog,
   type CatalogProduct,
@@ -171,6 +172,7 @@ export default function MobileAppPage() {
         <Link href={`/m/produto/${product.id}`} className="block p-3 pb-0">
           <img
             src={productImage(product)}
+            onError={handleProductImageError}
             alt={product.name}
             className="h-24 w-full rounded-[16px] bg-[#fff4ef] object-cover"
           />
@@ -319,6 +321,7 @@ export default function MobileAppPage() {
 
               <img
                 src={productImage(slide)}
+                onError={handleProductImageError}
                 alt=""
                 className="absolute bottom-4 right-4 top-4 w-[38%] rounded-[22px] object-cover"
               />

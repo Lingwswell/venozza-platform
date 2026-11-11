@@ -9,6 +9,7 @@ import { normalizeText } from "@/lib/catalog/category";
 import {
   formatDeliveryWindow,
   pickFeatured,
+  handleProductImageError,
   productImage,
   useStoreCatalog,
   type CatalogProduct,
@@ -213,6 +214,7 @@ export function HomePage() {
                     >
                       <img
                         src={productImage(product)}
+                        onError={handleProductImageError}
                         alt={product.name}
                         className={[
                           "w-full object-cover opacity-90 transition group-hover:scale-[1.03]",
@@ -275,6 +277,7 @@ export function HomePage() {
                           <Link href={`/m/produto/${product.id}`}>
                             <img
                               src={productImage(product)}
+                              onError={handleProductImageError}
                               alt={product.name}
                               className="h-44 w-full bg-[#fff4ef] object-cover"
                             />
