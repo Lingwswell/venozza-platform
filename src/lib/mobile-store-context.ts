@@ -1,3 +1,7 @@
+// Loja escolhida pelo cliente neste navegador.
+// Nao existe mais loja fixa no codigo: a rede vem do dominio e a loja e escolhida
+// pela localizacao do celular ou pelo proprio cliente (StorePicker).
+
 export type MobileStoreContext = {
   tenantId: string;
   storeId: string;
@@ -5,72 +9,82 @@ export type MobileStoreContext = {
   storeSlug: string;
 };
 
-export const DEFAULT_MOBILE_TENANT_ID = "cmnqqxn9p000092ozb3kd2dyf";
-export const DEFAULT_MOBILE_STORE_ID = "cmnqqxng8000192oz4bt0wo3u";
-export const DEFAULT_MOBILE_STORE_NAME = "VenoZza Centro";
-export const DEFAULT_MOBILE_STORE_SLUG = "centro";
+export const STORE_CHANGED_EVENT = "venozza:store-changed";
+
+const KEYS = {
+  tenantId: "venozza_tenant_id",
+  storeId: "venozza_store_id",
+  storeName: "venozza_store_name",
+  storeSlug: "venozza_store_slug",
+} as const;
+
+const EMPTY: MobileStoreContext = { tenantId: "", storeId: "", storeName: "", storeSlug: "" };
 
 function canUseStorage() {
-  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+  try {
+    return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+  } catch {
+    return false;
+  }
 }
 
 export function getMobileStoreContext(): MobileStoreContext {
-  if (!canUseStorage()) {
-    return {
-      tenantId: DEFAULT_MOBILE_TENANT_ID,
-      storeId: DEFAULT_MOBILE_STORE_ID,
-      storeName: DEFAULT_MOBILE_STORE_NAME,
-      storeSlug: DEFAULT_MOBILE_STORE_SLUG,
-    };
-  }
+  if (!canUseStorage()) return { ...EMPTY };
 
-  return {
-    tenantId:
-      localStorage.getItem("venozza_tenant_id") ||
-      DEFAULT_MOBILE_TENANT_ID,
-    storeId:
-      localStorage.getItem("venozza_store_id") ||
-      DEFAULT_MOBILE_STORE_ID,
-    storeName:
-      localStorage.getItem("venozza_store_name") ||
-      DEFAULT_MOBILE_STORE_NAME,
-    storeSlug:
-      localStorage.getItem("venozza_store_slug") ||
-      DEFAULT_MOBILE_STORE_SLUG,
-  };
+  try {
+    return {
+      tenantId: localStorage.getItem(KEYS.tenantId) || "",
+      storeId: localStorage.getItem(KEYS.storeId) || "",
+      storeName: localStorage.getItem(KEYS.storeName) || "",
+      storeSlug: localStorage.getItem(KEYS.storeSlug) || "",
+    };
+  } catch {
+    return { ...EMPTY };
+  }
+}
+
+export function hasSelectedStore() {
+  return getMobileStoreContext().storeId !== "";
 }
 
 export function setMobileStoreContext(context: Partial<MobileStoreContext>) {
   if (!canUseStorage()) return;
 
-  if (context.tenantId) {
-    localStorage.setItem("venozza_tenant_id", context.tenantId);
+  const before = getMobileStoreContext().storeId;
+
+  try {
+    for (const key of Object.keys(KEYS) as (keyof MobileStoreContext)[]) {
+      const value = context[key];
+      if (typeof value === "string" && value) localStorage.setItem(KEYS[key], value);
+    }
+  } catch {
+    return;
   }
 
-  if (context.storeId) {
-    localStorage.setItem("venozza_store_id", context.storeId);
-  }
-
-  if (context.storeName) {
-    localStorage.setItem("venozza_store_name", context.storeName);
-  }
-
-  if (context.storeSlug) {
-    localStorage.setItem("venozza_store_slug", context.storeSlug);
+  if (context.storeId && context.storeId !== before) {
+    window.dispatchEvent(new Event(STORE_CHANGED_EVENT));
   }
 }
 
+export function clearMobileStoreContext() {
+  if (!canUseStorage()) return;
+  try {
+    for (const key of Object.values(KEYS)) localStorage.removeItem(key);
+  } catch {
+    return;
+  }
+  window.dispatchEvent(new Event(STORE_CHANGED_EVENT));
+}
+
+/** Mantido por compatibilidade: devolve a loja salva (pode estar vazia). */
 export function ensureMobileStoreContext() {
-  const context = getMobileStoreContext();
-  setMobileStoreContext(context);
-  return context;
+  return getMobileStoreContext();
 }
 
-export function getMobileStoreHeaders() {
+export function getMobileStoreHeaders(): Record<string, string> {
   const context = getMobileStoreContext();
-
-  return {
-    "x-tenant-id": context.tenantId,
-    "x-store-id": context.storeId,
-  };
+  const headers: Record<string, string> = {};
+  if (context.tenantId) headers["x-tenant-id"] = context.tenantId;
+  if (context.storeId) headers["x-store-id"] = context.storeId;
+  return headers;
 }

@@ -14,6 +14,7 @@ import {
   getMobileStoreHeaders,
 } from "@/lib/mobile-store-context";
 import { handleProductImageError } from "@/lib/catalog/use-store-catalog";
+import { useRequireStore } from "@/lib/catalog/use-require-store";
 
 type Product = {
   id: string | number;
@@ -322,6 +323,7 @@ function CounterRow({
 }
 
 export default function MobileProductPage() {
+  useRequireStore();
   const router = useRouter();
   const params = useParams<{ id: string }>();
 

@@ -7,6 +7,7 @@ import {
 } from "@/lib/catalog/category";
 import { loadStoreSettings } from "@/lib/store/settings";
 import { enabledPaymentMethods, getOpenStatus } from "@/lib/store/settings-shared";
+import { resolveTenantFromRequest } from "@/lib/tenant/resolve";
 
 // Catalogo publico de uma loja: a mesma resposta alimenta o app (/m) e o site (/).
 // Tudo vem do banco: loja, marca (tenant), categorias, produtos, destaques e regras.
@@ -32,12 +33,25 @@ export async function GET(req: NextRequest) {
       ""
     ).trim();
 
-    if (!storeId) {
-      return NextResponse.json({ ok: false, error: "Loja não informada." }, { status: 400 });
+    const tenant = await resolveTenantFromRequest(req);
+
+    if (!tenant) {
+      return NextResponse.json(
+        { ok: false, code: "TENANT_NOT_FOUND", error: "Rede não encontrada para este endereço." },
+        { status: 404 }
+      );
     }
 
+    if (!storeId) {
+      return NextResponse.json(
+        { ok: false, code: "STORE_REQUIRED", error: "Escolha uma loja." },
+        { status: 400 }
+      );
+    }
+
+    // A loja precisa ser da rede do dominio acessado.
     const store = await prisma.store.findFirst({
-      where: { id: storeId, active: true, tenant: { active: true } },
+      where: { id: storeId, tenantId: tenant.id, active: true },
       select: {
         id: true,
         name: true,
@@ -50,7 +64,10 @@ export async function GET(req: NextRequest) {
     });
 
     if (!store) {
-      return NextResponse.json({ ok: false, error: "Loja não encontrada." }, { status: 404 });
+      return NextResponse.json(
+        { ok: false, code: "STORE_NOT_FOUND", error: "Loja não encontrada nesta rede." },
+        { status: 404 }
+      );
     }
 
     const [settings, categoryRows, productStores] = await Promise.all([

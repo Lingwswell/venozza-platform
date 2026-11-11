@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Clock3, MapPin, MessageCircle, Search, ShoppingBag, Wallet } from "lucide-react";
 import { addToCart, getCartCountByStore, purgeLegacyCartItems } from "@/lib/cart-storage";
 import { ensureMobileStoreContext } from "@/lib/mobile-store-context";
+import StorePicker from "@/components/store/StorePicker";
 import { normalizeText } from "@/lib/catalog/category";
 import {
   formatDeliveryWindow,
@@ -28,16 +29,19 @@ function needsChoice(product: CatalogProduct) {
 }
 
 export function HomePage() {
-  const { catalog, loading, error } = useStoreCatalog();
+  const { catalog, loading, error, needsStore } = useStoreCatalog();
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [cartCount, setCartCount] = useState(0);
   const [addedId, setAddedId] = useState<string | null>(null);
 
   useEffect(() => {
-    const store = ensureMobileStoreContext();
     purgeLegacyCartItems();
-    setCartCount(getCartCountByStore(store.storeId));
   }, []);
+
+  useEffect(() => {
+    if (catalog) setCartCount(getCartCountByStore(catalog.store.id));
+  }, [catalog]);
 
   const categories = useMemo(
     () => (catalog?.categories || []).filter((c) => c.showInSite),
@@ -87,13 +91,17 @@ export function HomePage() {
             <Link href="/" className="block truncate text-2xl font-black tracking-tight text-[#b3261e]">
               {brand || " "}
             </Link>
-            {catalog ? (
-              <p className="flex items-center gap-1 truncate text-xs text-[#6e6257] md:text-sm">
-                <MapPin className="h-3.5 w-3.5 text-[#b3261e]" />
-                {catalog.store.name}
-                {catalog.store.city ? ` · ${catalog.store.city}` : ""}
-              </p>
-            ) : null}
+            <button
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              className="flex items-center gap-1 truncate text-xs text-[#6e6257] hover:text-[#b3261e] md:text-sm"
+            >
+              <MapPin className="h-3.5 w-3.5 text-[#b3261e]" />
+              {catalog
+                ? `${catalog.store.name}${catalog.store.city ? ` · ${catalog.store.city}` : ""}`
+                : "Escolha a loja"}
+              <span className="font-semibold underline">trocar</span>
+            </button>
           </div>
 
           <label className="hidden flex-1 justify-center md:flex">
@@ -193,7 +201,7 @@ export function HomePage() {
           </section>
         ) : null}
 
-        {loading ? (
+        {needsStore ? null : loading ? (
           <p className="rounded-3xl bg-white p-6 text-sm font-semibold text-[#6e6257] shadow-sm">Carregando cardápio...</p>
         ) : error ? (
           <p className="rounded-3xl border border-red-200 bg-red-50 p-6 text-sm font-semibold text-red-700">{error}</p>
@@ -329,6 +337,12 @@ export function HomePage() {
           </div>
         </div>
       </footer>
+
+      {needsStore ? (
+        <StorePicker open automatic />
+      ) : (
+        <StorePicker open={pickerOpen} onClose={() => setPickerOpen(false)} />
+      )}
 
       {cartCount > 0 ? (
         <div className="fixed bottom-4 left-0 right-0 z-50 px-4 md:hidden">

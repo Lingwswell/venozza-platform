@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getAuthContextFromRequest } from "@/lib/auth/context";
 import { OrderService } from "@/lib/services/order.service";
 import { AppError } from "@/lib/api/errors";
+import { resolveTenantFromRequest } from "@/lib/tenant/resolve";
 import {
   getKdsRealtimeAdapter,
   getStoreChannel,
@@ -235,6 +236,17 @@ export async function POST(req: Request) {
         { ok: false, error: "tenantId é obrigatório" },
         { status: 400 }
       );
+    }
+
+    // Pedido publico: a loja precisa ser da rede do dominio acessado.
+    if (!auth.tenantId) {
+      const hostTenant = await resolveTenantFromRequest(req);
+      if (!hostTenant || hostTenant.id !== store.tenantId) {
+        return NextResponse.json(
+          { ok: false, error: "Loja inválida para este endereço." },
+          { status: 400 }
+        );
+      }
     }
 
     if (auth.tenantId && auth.tenantId !== store.tenantId) {

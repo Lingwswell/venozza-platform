@@ -15,6 +15,7 @@ import {
   getMobileStoreContext,
   getMobileStoreHeaders,
 } from "@/lib/mobile-store-context";
+import { useRequireStore } from "@/lib/catalog/use-require-store";
 
 type Product = {
   id: string | number;
@@ -141,6 +142,7 @@ function CounterRow({
 }
 
 export default function MeioAMeioPage() {
+  useRequireStore();
   const router = useRouter();
 
   const [products, setProducts] = useState<Product[]>([]);

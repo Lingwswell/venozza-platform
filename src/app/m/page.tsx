@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, Clock3, MapPin, Search, ShoppingBag, Star } from "lucide-react";
 import { addToCart, getCartCountByStore, purgeLegacyCartItems } from "@/lib/cart-storage";
 import AppBottomNav from "@/components/navigation/AppBottomNav";
+import StorePicker from "@/components/store/StorePicker";
 import { ensureMobileStoreContext } from "@/lib/mobile-store-context";
 import { normalizeText } from "@/lib/catalog/category";
 import {
@@ -92,7 +93,8 @@ function groupBeverages(products: CatalogProduct[]): DisplayProduct[] {
 }
 
 export default function MobileAppPage() {
-  const { catalog, loading, error } = useStoreCatalog();
+  const { catalog, loading, error, needsStore } = useStoreCatalog();
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [activeSlide, setActiveSlide] = useState(0);
   const [cartCount, setCartCount] = useState(0);
   const [activeCategoryKey, setActiveCategoryKey] = useState("");
@@ -126,10 +128,13 @@ export default function MobileAppPage() {
     : [];
 
   useEffect(() => {
-    const store = ensureMobileStoreContext();
     purgeLegacyCartItems();
-    setCartCount(getCartCountByStore(store.storeId));
   }, []);
+
+  // Carrinho e por loja: atualiza o contador quando a loja muda.
+  useEffect(() => {
+    if (catalog) setCartCount(getCartCountByStore(catalog.store.id));
+  }, [catalog]);
 
   useEffect(() => {
     if (featured.length < 2) return;
@@ -218,7 +223,12 @@ export default function MobileAppPage() {
       <div className="mx-auto w-full max-w-md px-4 pb-40 pt-3">
         <header className="mb-5">
           <div className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-1 items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              aria-label="Trocar de loja"
+              className="flex min-w-0 flex-1 items-center gap-3 text-left"
+            >
               <div className="grid h-12 w-12 shrink-0 place-items-center rounded-[18px] bg-gradient-to-br from-[#ff2a1f] to-[#c90816] text-xl font-black text-white shadow-[0_10px_25px_rgba(214,23,23,0.28)]">
                 {(catalog?.store.brandName || "·").charAt(0).toUpperCase()}
               </div>
@@ -232,10 +242,10 @@ export default function MobileAppPage() {
                 </div>
                 <div className="mt-1 flex items-center gap-1 text-[11px] font-semibold text-[#767676]">
                   <MapPin className="h-3.5 w-3.5 text-[#d61717]" />
-                  <span className="truncate">{catalog?.store.name || "Carregando loja..."}</span>
+                  <span className="truncate">{catalog?.store.name || "Escolha a loja"}</span>
                 </div>
               </div>
-            </div>
+            </button>
 
             <Link
               href="/m/carrinho"
@@ -346,7 +356,7 @@ export default function MobileAppPage() {
           </section>
         ) : null}
 
-        {loading ? (
+        {needsStore ? null : loading ? (
           <div className="rounded-[22px] border border-[#eadfda] bg-white p-4 text-sm font-bold text-[#666] shadow-sm">
             Carregando cardápio...
           </div>
@@ -455,6 +465,12 @@ export default function MobileAppPage() {
       </div>
 
       <AppBottomNav />
+
+      {needsStore ? (
+        <StorePicker open automatic />
+      ) : (
+        <StorePicker open={pickerOpen} onClose={() => setPickerOpen(false)} />
+      )}
     </main>
   );
 }

@@ -1,7 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState, type SyntheticEvent } from "react";
-import { ensureMobileStoreContext, setMobileStoreContext } from "@/lib/mobile-store-context";
+import {
+  STORE_CHANGED_EVENT,
+  clearMobileStoreContext,
+  getMobileStoreContext,
+  setMobileStoreContext,
+} from "@/lib/mobile-store-context";
 import type { OpenStatus, PaymentMethodKey } from "@/lib/store/settings-shared";
 
 // Tipos da resposta de /api/catalog — a mesma fonte para app (/m), site (/) e checkout.
@@ -86,17 +91,36 @@ export function useStoreCatalog() {
   const [catalog, setCatalog] = useState<StoreCatalog | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // true quando o cliente ainda nao escolheu loja (ou a salva nao vale mais)
+  const [needsStore, setNeedsStore] = useState(false);
 
   const load = useCallback(async () => {
+    const context = getMobileStoreContext();
+
+    if (!context.storeId) {
+      setCatalog(null);
+      setNeedsStore(true);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError("");
+    setNeedsStore(false);
 
     try {
-      const context = ensureMobileStoreContext();
       const res = await fetch(`/api/catalog?storeId=${encodeURIComponent(context.storeId)}`, {
         cache: "no-store",
       });
       const data = await res.json().catch(() => ({}));
+
+      // Loja salva nao existe mais ou e de outra rede: pede para escolher de novo.
+      if (data?.code === "STORE_NOT_FOUND" || data?.code === "STORE_REQUIRED") {
+        clearMobileStoreContext();
+        setCatalog(null);
+        setNeedsStore(true);
+        return;
+      }
 
       if (!res.ok || data?.ok === false) {
         throw new Error(data?.error || `Erro ao carregar o cardápio (HTTP ${res.status}).`);
@@ -122,7 +146,9 @@ export function useStoreCatalog() {
 
   useEffect(() => {
     load();
+    window.addEventListener(STORE_CHANGED_EVENT, load);
+    return () => window.removeEventListener(STORE_CHANGED_EVENT, load);
   }, [load]);
 
-  return { catalog, loading, error, reload: load };
+  return { catalog, loading, error, needsStore, reload: load };
 }

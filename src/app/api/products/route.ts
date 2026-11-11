@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { resolveTenantFromRequest } from "@/lib/tenant/resolve";
 
 export async function GET(req: NextRequest) {
   try {
@@ -15,6 +16,21 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(
         { ok: false, error: "Loja não informada." },
         { status: 400 }
+      );
+    }
+
+    const tenant = await resolveTenantFromRequest(req);
+    const store = tenant
+      ? await prisma.store.findFirst({
+          where: { id: storeId, tenantId: tenant.id, active: true },
+          select: { id: true },
+        })
+      : null;
+
+    if (!store) {
+      return NextResponse.json(
+        { ok: false, code: "STORE_NOT_FOUND", error: "Loja não encontrada nesta rede." },
+        { status: 404 }
       );
     }
 

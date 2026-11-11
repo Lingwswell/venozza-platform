@@ -18,8 +18,10 @@ import { getMobileStoreContext } from "@/lib/mobile-store-context";
 import { saveLocalOrderCode } from "@/lib/local-orders";
 import { useStoreCatalog } from "@/lib/catalog/use-store-catalog";
 import { computeDeliveryFeeCents, DEFAULT_STORE_SETTINGS } from "@/lib/store/settings-shared";
+import { useRequireStore } from "@/lib/catalog/use-require-store";
 
 export default function MobileCheckoutPage() {
+  useRequireStore();
   const [mounted, setMounted] = useState(false);
   const [items, setItems] = useState<CartItem[]>([]);
   const [customerName, setCustomerName] = useState("");

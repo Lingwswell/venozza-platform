@@ -21,8 +21,23 @@ model Tenant {
   categories   Category[]
   optionGroups OptionGroup[]
   optionItems  OptionItem[]
+  domains      TenantDomain[]
 
   @@map("tenants")
+}
+
+// Dominios de cada rede (ex.: "pedidos.venozza.com.br"). O app/site descobre
+// a rede pelo dominio acessado; a loja e escolhida dentro da rede.
+model TenantDomain {
+  id        String   @id @default(cuid())
+  tenantId  String
+  host      String   @unique
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("tenant_domains")
 }
 
 model Store {

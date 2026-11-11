@@ -10,6 +10,7 @@ import {
 } from "@/lib/cart-storage";
 import type { CartItem } from "@/types/order";
 import { getMobileStoreContext } from "@/lib/mobile-store-context";
+import { useRequireStore } from "@/lib/catalog/use-require-store";
 
 function moneyFromCents(value: number) {
   return (value / 100).toLocaleString("pt-BR", {
@@ -19,6 +20,7 @@ function moneyFromCents(value: number) {
 }
 
 export default function CarrinhoPage() {
+  useRequireStore();
   const [items, setItems] = useState<CartItem[]>([]);
 
   function reloadCart() {

@@ -1,330 +1,417 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import AdminShell from "@/components/admin/AdminShell";
+import { fetchWithAuth } from "@/lib/auth/fetch-auth";
+import { parseCoordinates } from "@/lib/geo";
 
 type AdminStore = {
   id: string;
-  name?: string | null;
-  slug?: string | null;
-  city?: string | null;
-  state?: string | null;
-  cidade?: string | null;
-  estado?: string | null;
-  uf?: string | null;
-  active?: boolean | null;
-  tenantId?: string | null;
+  name: string;
+  slug: string;
+  addressStreet: string | null;
+  addressNumber: string | null;
+  addressComplement: string | null;
+  addressNeighborhood: string | null;
+  city: string | null;
+  state: string | null;
+  zipCode: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  deliveryRadiusKm: number | null;
+  active: boolean;
 };
 
-type StoresResponse = {
-  ok?: boolean;
-  stores?: AdminStore[];
-  data?: AdminStore[];
-  items?: AdminStore[];
-  currentStoreId?: string | null;
-  selectedStoreId?: string | null;
-  operatorStoreId?: string | null;
-  error?: string;
-  message?: string;
+type FormState = {
+  name: string;
+  addressStreet: string;
+  addressNumber: string;
+  addressComplement: string;
+  addressNeighborhood: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  coordinates: string;
+  deliveryRadiusKm: string;
+  active: boolean;
+  copyFromStoreId: string;
 };
 
-function getAuthToken() {
-  if (typeof window === "undefined") return null;
+const EMPTY_FORM: FormState = {
+  name: "",
+  addressStreet: "",
+  addressNumber: "",
+  addressComplement: "",
+  addressNeighborhood: "",
+  city: "",
+  state: "",
+  zipCode: "",
+  coordinates: "",
+  deliveryRadiusKm: "",
+  active: true,
+  copyFromStoreId: "",
+};
 
-  return (
-    localStorage.getItem("venozza_auth_token") ||
-    localStorage.getItem("venozza_token") ||
-    localStorage.getItem("token") ||
-    null
-  );
+function toForm(store: AdminStore): FormState {
+  return {
+    name: store.name,
+    addressStreet: store.addressStreet || "",
+    addressNumber: store.addressNumber || "",
+    addressComplement: store.addressComplement || "",
+    addressNeighborhood: store.addressNeighborhood || "",
+    city: store.city || "",
+    state: store.state || "",
+    zipCode: store.zipCode || "",
+    coordinates:
+      store.latitude !== null && store.longitude !== null
+        ? `${store.latitude}, ${store.longitude}`
+        : "",
+    deliveryRadiusKm: store.deliveryRadiusKm !== null ? String(store.deliveryRadiusKm) : "",
+    active: store.active,
+    copyFromStoreId: "",
+  };
 }
 
-function getLocalStoreId() {
-  if (typeof window === "undefined") return null;
-
-  return (
-    localStorage.getItem("venozza_store_id") ||
-    localStorage.getItem("store_id") ||
-    null
-  );
+function addressLine(store: AdminStore) {
+  const street = [store.addressStreet, store.addressNumber].filter(Boolean).join(", ");
+  const place = [store.addressNeighborhood, store.city, store.state].filter(Boolean).join(" · ");
+  return [street, place].filter(Boolean).join(" — ") || "Endereço não cadastrado";
 }
 
-function getLocalTenantId() {
-  if (typeof window === "undefined") return null;
+const inputClass =
+  "w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-orange-400";
 
-  return (
-    localStorage.getItem("venozza_tenant_id") ||
-    localStorage.getItem("tenant_id") ||
-    null
-  );
-}
-
-function getLocalUserRole() {
-  if (typeof window === "undefined") return null;
-
-  return (
-    localStorage.getItem("venozza_user_role") ||
-    localStorage.getItem("user_role") ||
-    null
-  );
-}
-
-function normalizeStores(payload: StoresResponse): AdminStore[] {
-  if (Array.isArray(payload.stores)) return payload.stores;
-  if (Array.isArray(payload.data)) return payload.data;
-  if (Array.isArray(payload.items)) return payload.items;
-  return [];
-}
-
-function getStoreCity(store: AdminStore) {
-  return store.city || store.cidade || "-";
-}
-
-function getStoreState(store: AdminStore) {
-  return store.state || store.estado || store.uf || "-";
-}
-
-export default function AdminLojasPage() {
+export default function LojasPage() {
   const [stores, setStores] = useState<AdminStore[]>([]);
-  const [currentStoreId, setCurrentStoreId] = useState<string | null>(null);
+  const [role, setRole] = useState("");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [editingId, setEditingId] = useState<string | "new" | null>(null);
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
+  const [locating, setLocating] = useState(false);
 
-  async function loadStores() {
+  const canManage = role === "owner" || role === "super_admin";
+
+  const load = useCallback(async () => {
     setLoading(true);
-    setError(null);
-
+    setError("");
     try {
-      const token = getAuthToken();
-      const localTenantId = getLocalTenantId();
-      const localStoreId = getLocalStoreId();
-      const localUserRole = getLocalUserRole();
-
-      const headers: HeadersInit = {
-        "Content-Type": "application/json",
-      };
-
-      if (token) {
-        headers.Authorization = `Bearer ${token}`;
-      }
-
-      if (localTenantId) {
-        headers["x-tenant-id"] = localTenantId;
-      }
-
-      if (localStoreId) {
-        headers["x-store-id"] = localStoreId;
-      }
-
-      if (localUserRole) {
-        headers["x-user-role"] = localUserRole;
-      }
-
-      const response = await fetch("/api/admin/stores", {
-        method: "GET",
-        headers,
-        cache: "no-store",
-      });
-
-      const payload = (await response.json().catch(() => ({}))) as StoresResponse;
-
-      if (!response.ok || payload.ok === false) {
-        throw new Error(
-          payload.error ||
-            payload.message ||
-            `Erro ao carregar lojas. HTTP ${response.status}`
-        );
-      }
-
-      const nextStores = normalizeStores(payload);
-
-      setStores(nextStores);
-      setCurrentStoreId(
-        payload.currentStoreId ||
-          payload.selectedStoreId ||
-          payload.operatorStoreId ||
-          localStoreId ||
-          null
-      );
+      const res = await fetchWithAuth("/api/admin/stores?all=1");
+      const data = await res.json();
+      if (!res.ok || !data?.ok) throw new Error(data?.error || "Erro ao carregar lojas.");
+      setStores(Array.isArray(data.stores) ? data.stores : []);
+      setRole(String(data.role || ""));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro desconhecido ao carregar lojas.");
-      setStores([]);
+      setError(err instanceof Error ? err.message : "Erro ao carregar lojas.");
     } finally {
       setLoading(false);
     }
-  }
-
-  useEffect(() => {
-    loadStores();
   }, []);
 
-  const activeStoresCount = useMemo(() => {
-    return stores.filter((store) => store.active !== false).length;
-  }, [stores]);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  function update<K extends keyof FormState>(key: K, value: FormState[K]) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function startEdit(store: AdminStore) {
+    setEditingId(store.id);
+    setForm(toForm(store));
+    setError("");
+    setSuccess("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function startCreate() {
+    setEditingId("new");
+    setForm({ ...EMPTY_FORM, copyFromStoreId: stores.find((s) => s.active)?.id || "" });
+    setError("");
+    setSuccess("");
+  }
+
+  function fillWithMyLocation() {
+    if (!("geolocation" in navigator) || !window.isSecureContext) {
+      setError(
+        "O navegador só libera a localização em HTTPS. Cole as coordenadas do Google Maps (clique com o botão direito no local → primeira linha)."
+      );
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocating(false);
+        update("coordinates", `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`);
+      },
+      () => {
+        setLocating(false);
+        setError("Não foi possível pegar a localização deste aparelho.");
+      },
+      { enableHighAccuracy: true, timeout: 15000 }
+    );
+  }
+
+  async function save() {
+    setError("");
+    setSuccess("");
+
+    let latitude: number | null = null;
+    let longitude: number | null = null;
+    if (form.coordinates.trim()) {
+      const parsed = parseCoordinates(form.coordinates);
+      if (!parsed) {
+        setError("Coordenadas inválidas. Use o formato: -23.550520, -46.633308");
+        return;
+      }
+      [latitude, longitude] = parsed;
+    }
+
+    const body: Record<string, unknown> = {
+      name: form.name,
+      addressStreet: form.addressStreet,
+      addressNumber: form.addressNumber,
+      addressComplement: form.addressComplement,
+      addressNeighborhood: form.addressNeighborhood,
+      city: form.city,
+      state: form.state,
+      zipCode: form.zipCode,
+      latitude,
+      longitude,
+      deliveryRadiusKm: form.deliveryRadiusKm.trim() || null,
+      active: form.active,
+    };
+    if (editingId === "new" && form.copyFromStoreId) body.copyFromStoreId = form.copyFromStoreId;
+
+    setSaving(true);
+    try {
+      const res = await fetchWithAuth(
+        editingId === "new" ? "/api/admin/stores" : `/api/admin/stores/${editingId}`,
+        {
+          method: editingId === "new" ? "POST" : "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok || !data?.ok) throw new Error(data?.error || "Erro ao salvar loja.");
+
+      setSuccess(editingId === "new" ? "Loja criada." : "Loja salva.");
+      setEditingId(null);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao salvar loja.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const coords = parseCoordinates(form.coordinates);
 
   return (
-    <main className="space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <p className="text-sm font-medium text-zinc-500">Administração</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-zinc-950">
-            Lojas
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-zinc-600">
-            Gerencie as lojas reais do tenant, visualize a loja atual do operador
-            e prepare a estrutura para futuras ações de criação e edição.
+    <AdminShell title="Lojas" subtitle="Endereço, localização e área de entrega de cada loja da rede.">
+      <div className="flex flex-col gap-6">
+        <section className="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between">
+          <p className="max-w-2xl text-sm text-slate-600">
+            O app usa a localização do celular para abrir a loja mais perto do cliente. Para isso cada
+            loja precisa das <strong>coordenadas</strong> e, se quiser avisar quem está longe, do
+            <strong> raio de entrega</strong>.
           </p>
-        </div>
-
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={loadStores}
-            className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50"
-          >
-            Atualizar
-          </button>
-
-          <button
-            type="button"
-            disabled
-            title="Em breve"
-            className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white opacity-50 shadow-sm"
-          >
-            Nova loja
-          </button>
-        </div>
-      </div>
-
-      <section className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-          <p className="text-sm font-medium text-zinc-500">Total de lojas</p>
-          <p className="mt-2 text-3xl font-bold text-zinc-950">{stores.length}</p>
-        </div>
-
-        <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-          <p className="text-sm font-medium text-zinc-500">Lojas ativas</p>
-          <p className="mt-2 text-3xl font-bold text-zinc-950">{activeStoresCount}</p>
-        </div>
-
-        <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-          <p className="text-sm font-medium text-zinc-500">Loja atual</p>
-          <p className="mt-2 truncate text-sm font-semibold text-zinc-950">
-            {currentStoreId || "Não identificada"}
-          </p>
-        </div>
-      </section>
-
-      {loading && (
-        <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600 shadow-sm">
-          Carregando lojas...
-        </div>
-      )}
-
-      {!loading && error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-700 shadow-sm">
-          {error}
-        </div>
-      )}
-
-      {!loading && !error && stores.length === 0 && (
-        <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600 shadow-sm">
-          Nenhuma loja encontrada.
-        </div>
-      )}
-
-      {!loading && !error && stores.length > 0 && (
-        <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
-          <div className="border-b border-zinc-200 px-5 py-4">
-            <h2 className="text-base font-bold text-zinc-950">Lojas cadastradas</h2>
-            <p className="mt-1 text-sm text-zinc-500">
-              Dados carregados diretamente de <code>/api/admin/stores</code>.
-            </p>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-zinc-200 text-sm">
-              <thead className="bg-zinc-50">
-                <tr>
-                  <th className="px-5 py-3 text-left font-semibold text-zinc-600">
-                    Loja
-                  </th>
-                  <th className="px-5 py-3 text-left font-semibold text-zinc-600">
-                    Slug
-                  </th>
-                  <th className="px-5 py-3 text-left font-semibold text-zinc-600">
-                    Cidade/UF
-                  </th>
-                  <th className="px-5 py-3 text-left font-semibold text-zinc-600">
-                    Status
-                  </th>
-                  <th className="px-5 py-3 text-right font-semibold text-zinc-600">
-                    Ações
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-zinc-100 bg-white">
-                {stores.map((store) => {
-                  const isCurrent = currentStoreId === store.id;
-
-                  return (
-                    <tr key={store.id} className={isCurrent ? "bg-emerald-50/60" : ""}>
-                      <td className="px-5 py-4">
-                        <div className="flex flex-col gap-1">
-                          <span className="font-semibold text-zinc-950">
-                            {store.name || "Loja sem nome"}
-                          </span>
-
-                          <span className="text-xs text-zinc-500">
-                            ID: {store.id}
-                          </span>
-
-                          {isCurrent && (
-                            <span className="mt-1 w-fit rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">
-                              Loja atual do operador
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      <td className="px-5 py-4 text-zinc-700">
-                        {store.slug || "-"}
-                      </td>
-
-                      <td className="px-5 py-4 text-zinc-700">
-                        {getStoreCity(store)}/{getStoreState(store)}
-                      </td>
-
-                      <td className="px-5 py-4">
-                        {store.active === false ? (
-                          <span className="rounded-full bg-zinc-100 px-2 py-1 text-xs font-semibold text-zinc-600">
-                            Inativa
-                          </span>
-                        ) : (
-                          <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">
-                            Ativa
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="px-5 py-4 text-right">
-                        <button
-                          type="button"
-                          disabled
-                          title="Edição será implementada em etapa futura"
-                          className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-500 opacity-60"
-                        >
-                          Editar
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          {canManage ? (
+            <button
+              type="button"
+              onClick={startCreate}
+              className="rounded-2xl bg-orange-500 px-5 py-3 text-sm font-bold text-white hover:bg-orange-600"
+            >
+              Nova loja
+            </button>
+          ) : null}
         </section>
-      )}
-    </main>
+
+        {error ? <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{error}</p> : null}
+        {success ? <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">{success}</p> : null}
+
+        {editingId ? (
+          <section className="rounded-3xl border border-orange-200 bg-white p-6 shadow-sm">
+            <h3 className="text-lg font-black text-slate-900">
+              {editingId === "new" ? "Nova loja" : `Editar ${form.name}`}
+            </h3>
+
+            <div className="mt-4 grid gap-4 md:grid-cols-6">
+              <label className="md:col-span-3">
+                <span className="mb-1 block text-xs font-bold uppercase text-slate-500">Nome</span>
+                <input value={form.name} onChange={(e) => update("name", e.target.value)} placeholder="Ex.: VenoZza Centro" className={inputClass} />
+              </label>
+              <label className="md:col-span-2">
+                <span className="mb-1 block text-xs font-bold uppercase text-slate-500">CEP</span>
+                <input value={form.zipCode} onChange={(e) => update("zipCode", e.target.value)} className={inputClass} />
+              </label>
+              <label className="flex items-end gap-2 pb-3 md:col-span-1">
+                <input type="checkbox" checked={form.active} onChange={(e) => update("active", e.target.checked)} />
+                <span className="text-sm font-bold text-slate-800">Ativa</span>
+              </label>
+
+              <label className="md:col-span-4">
+                <span className="mb-1 block text-xs font-bold uppercase text-slate-500">Rua</span>
+                <input value={form.addressStreet} onChange={(e) => update("addressStreet", e.target.value)} className={inputClass} />
+              </label>
+              <label className="md:col-span-1">
+                <span className="mb-1 block text-xs font-bold uppercase text-slate-500">Número</span>
+                <input value={form.addressNumber} onChange={(e) => update("addressNumber", e.target.value)} className={inputClass} />
+              </label>
+              <label className="md:col-span-1">
+                <span className="mb-1 block text-xs font-bold uppercase text-slate-500">Compl.</span>
+                <input value={form.addressComplement} onChange={(e) => update("addressComplement", e.target.value)} className={inputClass} />
+              </label>
+
+              <label className="md:col-span-2">
+                <span className="mb-1 block text-xs font-bold uppercase text-slate-500">Bairro</span>
+                <input value={form.addressNeighborhood} onChange={(e) => update("addressNeighborhood", e.target.value)} className={inputClass} />
+              </label>
+              <label className="md:col-span-3">
+                <span className="mb-1 block text-xs font-bold uppercase text-slate-500">Cidade</span>
+                <input value={form.city} onChange={(e) => update("city", e.target.value)} className={inputClass} />
+              </label>
+              <label className="md:col-span-1">
+                <span className="mb-1 block text-xs font-bold uppercase text-slate-500">UF</span>
+                <input value={form.state} maxLength={2} onChange={(e) => update("state", e.target.value)} className={inputClass} />
+              </label>
+
+              <label className="md:col-span-4">
+                <span className="mb-1 block text-xs font-bold uppercase text-slate-500">
+                  Coordenadas (latitude, longitude)
+                </span>
+                <input
+                  value={form.coordinates}
+                  onChange={(e) => update("coordinates", e.target.value)}
+                  placeholder="-23.550520, -46.633308"
+                  className={inputClass}
+                />
+                <span className="mt-1 block text-xs text-slate-500">
+                  No Google Maps: botão direito em cima da loja → clique na primeira linha (copia) → cole aqui.
+                  {coords ? (
+                    <>
+                      {" "}
+                      <a
+                        href={`https://www.google.com/maps?q=${coords[0]},${coords[1]}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-bold text-orange-600 underline"
+                      >
+                        Conferir no mapa
+                      </a>
+                    </>
+                  ) : null}
+                </span>
+              </label>
+              <div className="flex items-start pt-6 md:col-span-2">
+                <button
+                  type="button"
+                  onClick={fillWithMyLocation}
+                  disabled={locating}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                >
+                  {locating ? "Localizando..." : "Estou na loja: usar minha localização"}
+                </button>
+              </div>
+
+              <label className="md:col-span-2">
+                <span className="mb-1 block text-xs font-bold uppercase text-slate-500">Raio de entrega (km)</span>
+                <input
+                  value={form.deliveryRadiusKm}
+                  onChange={(e) => update("deliveryRadiusKm", e.target.value)}
+                  placeholder="Ex.: 5 (vazio = sem limite)"
+                  className={inputClass}
+                />
+              </label>
+
+              {editingId === "new" ? (
+                <label className="md:col-span-4">
+                  <span className="mb-1 block text-xs font-bold uppercase text-slate-500">Cardápio inicial</span>
+                  <select
+                    value={form.copyFromStoreId}
+                    onChange={(e) => update("copyFromStoreId", e.target.value)}
+                    className={inputClass}
+                  >
+                    <option value="">Começar sem produtos</option>
+                    {stores.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        Copiar produtos, preços e estoque de {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={save}
+                disabled={saving}
+                className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-60"
+              >
+                {saving ? "Salvando..." : editingId === "new" ? "Criar loja" : "Salvar loja"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingId(null)}
+                className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700"
+              >
+                Cancelar
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          {loading ? (
+            <p className="p-6 text-sm text-slate-500">Carregando...</p>
+          ) : stores.length === 0 ? (
+            <p className="p-6 text-sm text-slate-500">Nenhuma loja cadastrada.</p>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {stores.map((store) => {
+                const hasCoords = store.latitude !== null && store.longitude !== null;
+                return (
+                  <li key={store.id} className="flex flex-col gap-3 p-5 md:flex-row md:items-center md:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <strong className="text-base text-slate-900">{store.name}</strong>
+                        {!store.active ? (
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-500">Desativada</span>
+                        ) : null}
+                        {hasCoords ? (
+                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700">Localização ok</span>
+                        ) : (
+                          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-700">Sem localização</span>
+                        )}
+                        {store.deliveryRadiusKm ? (
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-600">
+                            Entrega até {store.deliveryRadiusKm} km
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="mt-1 text-sm text-slate-500">{addressLine(store)}</p>
+                    </div>
+                    {canManage ? (
+                      <button
+                        type="button"
+                        onClick={() => startEdit(store)}
+                        className="shrink-0 rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                      >
+                        Editar
+                      </button>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      </div>
+    </AdminShell>
   );
 }
