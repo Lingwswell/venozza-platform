@@ -9,6 +9,13 @@ import {
 import { OrderRepository } from "@/lib/repositories/order.repository";
 import { prisma } from "@/lib/db";
 import { validateCreateOrder } from "@/lib/validators/order.validator";
+import { loadStoreSettings } from "@/lib/store/settings";
+import {
+  computeDeliveryFeeCents,
+  enabledPaymentMethods,
+  getOpenStatus,
+} from "@/lib/store/settings-shared";
+import { formatMoneyFromCents } from "@/lib/utils/formatters";
 import type {
   CreateOrderInput,
   CreateOrderItemInput,
@@ -529,6 +536,21 @@ export class OrderService {
       throw new AppError("Loja do pedido é obrigatória.", 400);
     }
 
+    // Regras da loja vem do banco (store_settings), nunca do navegador.
+    const settings = await loadStoreSettings(normalizedStoreId);
+    const openStatus = getOpenStatus(settings);
+
+    if (!openStatus.open) {
+      throw new AppError(openStatus.message, 409);
+    }
+
+    const paymentMethod = input.payment_method ?? input.paymentMethod ?? "pix";
+    const allowedPayments = enabledPaymentMethods(settings).map((m) => m.key);
+
+    if (!allowedPayments.includes(paymentMethod)) {
+      throw new AppError("Forma de pagamento não aceita por esta loja.", 400);
+    }
+
     const normalizedItems = await normalizeItemsWithDBPrice(
       input.items,
       normalizedStoreId
@@ -536,7 +558,14 @@ export class OrderService {
 
     const subtotal_cents = getSubtotalCents(normalizedItems);
 
-    const freight_cents = subtotal_cents > 0 ? 500 : 0;
+    if (settings.minimumOrderCents > 0 && subtotal_cents < settings.minimumOrderCents) {
+      throw new AppError(
+        `Pedido mínimo desta loja: ${formatMoneyFromCents(settings.minimumOrderCents)}.`,
+        400
+      );
+    }
+
+    const freight_cents = computeDeliveryFeeCents(settings, subtotal_cents);
 
     const total_cents = subtotal_cents + freight_cents;
 
@@ -546,6 +575,8 @@ export class OrderService {
 
     return OrderRepository.create({
       ...input,
+      payment_method: paymentMethod,
+      paymentMethod,
       items: normalizedItems,
       storeId: normalizedStoreId,
       store_id: normalizedStoreId,

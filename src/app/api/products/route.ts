@@ -10,7 +10,15 @@ export async function GET(req: NextRequest) {
 
     const storeId = queryStoreId || headerStoreId || null;
 
-    if (storeId) {
+    // Sem loja nao ha como saber de qual rede sao os produtos: nunca listar tudo.
+    if (!storeId) {
+      return NextResponse.json(
+        { ok: false, error: "Loja não informada." },
+        { status: 400 }
+      );
+    }
+
+    {
       const productStores = await prisma.productStore.findMany({
         where: {
           storeId,
@@ -63,6 +71,7 @@ export async function GET(req: NextRequest) {
               active: isAvailable,
               available: isAvailable,
               stock,
+              featured: row.featured,
               stockStatus: stock <= 0 ? "out_of_stock" : "available",
               storeId: row.storeId,
               baseStoreId: row.product.storeId,
@@ -78,7 +87,7 @@ export async function GET(req: NextRequest) {
     const products = await prisma.product.findMany({
       where: {
         available: true,
-        ...(storeId ? { storeId } : {}),
+        storeId,
       },
       orderBy: {
         name: "asc",

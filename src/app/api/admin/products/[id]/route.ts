@@ -176,6 +176,8 @@ export async function PATCH(
     const image = body.image ? String(body.image).trim() : null;
     const available = body.available !== false;
     const stock = normalizeStock(body.stock);
+    // So altera o destaque quando o campo vier no corpo.
+    const featured = typeof body.featured === "boolean" ? body.featured : undefined;
 
     const requestedStoreId = String(
       body.storeId || body.store_id || currentProduct.storeId
@@ -279,6 +281,7 @@ export async function PATCH(
           available,
           stock,
           price_cents: priceCents,
+          ...(typeof featured === "boolean" ? { featured } : {}),
         },
         create: {
           productId: id,
@@ -286,11 +289,13 @@ export async function PATCH(
           available,
           stock,
           price_cents: priceCents,
+          featured: featured === true,
         },
         select: {
           id: true,
           available: true,
           stock: true,
+          featured: true,
           price_cents: true,
           storeId: true,
         },
@@ -311,6 +316,7 @@ export async function PATCH(
         storeAvailable: productStore.available,
         productAvailable: product.available,
         stock: productStore.stock,
+        featured: productStore.featured,
         price_cents: effectivePriceCents,
         price: effectivePriceCents / 100,
         storeId: productStore.storeId,

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getAuthContextFromRequest } from "@/lib/auth/context";
 import { OrderService } from "@/lib/services/order.service";
+import { AppError } from "@/lib/api/errors";
 import {
   getKdsRealtimeAdapter,
   getStoreChannel,
@@ -150,7 +151,9 @@ export async function GET(req: Request) {
       error instanceof Error ? error.message : "Erro ao listar pedidos.";
 
     const status =
-      message.includes("Authorization") || message.includes("Usuário inválido")
+      error instanceof AppError
+        ? error.statusCode
+        : message.includes("Authorization") || message.includes("Usuário inválido")
         ? 401
         : 500;
 
@@ -320,7 +323,9 @@ export async function POST(req: Request) {
       error instanceof Error ? error.message : "Erro ao criar pedido.";
 
     const status =
-      message.includes("Authorization") ||
+      error instanceof AppError
+        ? error.statusCode
+        : message.includes("Authorization") ||
       message.includes("Usuário inválido") ||
       message.includes("Token inválido")
         ? 401

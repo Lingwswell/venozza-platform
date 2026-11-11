@@ -16,6 +16,8 @@ import { formatMoneyFromCents } from "@/lib/utils/formatters";
 import { getAuthToken } from "@/lib/auth/token";
 import { getMobileStoreContext } from "@/lib/mobile-store-context";
 import { saveLocalOrderCode } from "@/lib/local-orders";
+import { useStoreCatalog } from "@/lib/catalog/use-store-catalog";
+import { computeDeliveryFeeCents, DEFAULT_STORE_SETTINGS } from "@/lib/store/settings-shared";
 
 export default function MobileCheckoutPage() {
   const [mounted, setMounted] = useState(false);
@@ -28,7 +30,9 @@ export default function MobileCheckoutPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
-  const deliveryFeeCents = 500;
+  // Frete, pedido minimo, pagamentos e loja aberta vem do banco (mesma fonte do servidor).
+  const { catalog } = useStoreCatalog();
+  const paymentMethods = catalog?.paymentMethods || [];
 
   function loadCart() {
     const mobileStore = getMobileStoreContext();
@@ -65,6 +69,26 @@ export default function MobileCheckoutPage() {
       return sum + Number(item.price_cents || 0) * Number(item.quantity || 0);
     }, 0);
   }, [items]);
+
+  const deliveryFeeCents = useMemo(() => {
+    if (!catalog) return 0;
+    return computeDeliveryFeeCents(
+      { ...DEFAULT_STORE_SETTINGS, ...catalog.settings },
+      subtotalCents
+    );
+  }, [catalog, subtotalCents]);
+
+  const minimumOrderCents = catalog?.settings.minimumOrderCents || 0;
+  const belowMinimum = minimumOrderCents > 0 && subtotalCents < minimumOrderCents;
+  const storeClosed = catalog ? !catalog.status.open : false;
+
+  // Se a forma escolhida nao for aceita pela loja, seleciona a primeira aceita.
+  useEffect(() => {
+    if (paymentMethods.length === 0) return;
+    if (!paymentMethods.some((m) => m.key === paymentMethod)) {
+      setPaymentMethod(paymentMethods[0].key);
+    }
+  }, [paymentMethods, paymentMethod]);
 
   const finalTotalCents = subtotalCents + (items.length > 0 ? deliveryFeeCents : 0);
 
@@ -115,6 +139,16 @@ export default function MobileCheckoutPage() {
       return;
     }
 
+    if (storeClosed) {
+      setMessage(catalog?.status.message || "A loja está fechada no momento.");
+      return;
+    }
+
+    if (belowMinimum) {
+      setMessage(`Pedido mínimo: ${formatMoneyFromCents(minimumOrderCents)}.`);
+      return;
+    }
+
     setLoading(true);
     setMessage("");
 
@@ -123,8 +157,6 @@ export default function MobileCheckoutPage() {
       const mobileStore = getMobileStoreContext();
       const storeId = mobileStore.storeId;
       const tenantId = mobileStore.tenantId;
-      console.log("[checkout] tenantId:", tenantId);
-      console.log("[checkout] storeId:", storeId);
 
       const response = await fetch("/api/orders", {
         method: "POST",
@@ -191,7 +223,7 @@ export default function MobileCheckoutPage() {
     }
   }
 
-  const isDisabled = loading || items.length === 0;
+  const isDisabled = loading || items.length === 0 || storeClosed || belowMinimum || !catalog;
 
   if (!mounted) {
     return (
@@ -318,7 +350,7 @@ export default function MobileCheckoutPage() {
                   Subtotal: {formatMoneyFromCents(subtotalCents)}
                 </div>
                 <div className="mb-1 text-[#666]">
-                  Entrega: {formatMoneyFromCents(deliveryFeeCents)}
+                  Entrega: {deliveryFeeCents > 0 ? formatMoneyFromCents(deliveryFeeCents) : "grátis"}
                 </div>
                 <span className="text-lg font-black text-[#171717]">
                   Total: {formatMoneyFromCents(finalTotalCents)}
@@ -367,11 +399,23 @@ export default function MobileCheckoutPage() {
             onChange={(e) => setPaymentMethod(e.target.value)}
             className="w-full rounded-2xl border border-[#e7ddd8] px-4 py-3 text-sm outline-none"
           >
-            <option value="pix">PIX</option>
-            <option value="credito">Cartão de crédito</option>
-            <option value="debito">Cartão de débito</option>
-            <option value="dinheiro">Dinheiro</option>
+            {paymentMethods.map((method) => (
+              <option key={method.key} value={method.key}>
+                {method.label}
+              </option>
+            ))}
           </select>
+
+          {storeClosed ? (
+            <p className="rounded-2xl bg-[#fff1f1] px-4 py-3 text-sm font-semibold text-[#d91c1c]">
+              {catalog?.status.message}
+            </p>
+          ) : belowMinimum ? (
+            <p className="rounded-2xl bg-[#fff8e6] px-4 py-3 text-sm font-semibold text-[#8a5a00]">
+              Pedido mínimo de {formatMoneyFromCents(minimumOrderCents)}. Faltam{" "}
+              {formatMoneyFromCents(minimumOrderCents - subtotalCents)}.
+            </p>
+          ) : null}
 
           {message ? (
             <p className="rounded-2xl bg-[#fff1f1] px-4 py-3 text-sm font-semibold text-[#d91c1c]">

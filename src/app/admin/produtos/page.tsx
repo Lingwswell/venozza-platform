@@ -42,6 +42,7 @@ type AdminProduct = {
   productAvailable?: boolean;
   storeAvailable?: boolean;
   stock?: number;
+  featured?: boolean;
   price_cents: number;
   price: number;
   storeId: string;
@@ -73,6 +74,7 @@ type ProductFormState = {
   description: string;
   image: string;
   available: boolean;
+  featured: boolean;
   allStores: boolean;
 };
 
@@ -109,6 +111,7 @@ export default function AdminProdutosPage() {
     description: "",
     image: "",
     available: true,
+    featured: false,
     allStores: false,
   });
 
@@ -230,6 +233,7 @@ export default function AdminProdutosPage() {
       description: "",
       image: "",
       available: true,
+      featured: false,
       allStores: false,
     });
   }
@@ -457,6 +461,7 @@ export default function AdminProdutosPage() {
           description: form.description,
           image: form.image,
           available: form.available,
+          featured: form.featured,
           allStores: formMode === "create" ? form.allStores : false,
         }),
       });
@@ -512,6 +517,7 @@ export default function AdminProdutosPage() {
       description: product.description || "",
       image: product.image || "",
       available: product.available !== false,
+      featured: product.featured === true,
       allStores: false,
     });
 
@@ -1060,6 +1066,17 @@ export default function AdminProdutosPage() {
                   Produto disponível
                 </span>
               </label>
+
+              <label className="flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3">
+                <input
+                  type="checkbox"
+                  checked={form.featured}
+                  onChange={(event) => updateForm("featured", event.target.checked)}
+                />
+                <span className="text-sm font-semibold text-slate-700">
+                  Destaque no app e no site (banner e topo do cardápio)
+                </span>
+              </label>
             </div>
 
             <div className="mt-5 flex flex-wrap gap-2">
@@ -1340,6 +1357,16 @@ export default function AdminProdutosPage() {
                               Disponível
                             </span>
                           )}
+                          {product.featured ? (
+                            <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700">
+                              ★ Destaque
+                            </span>
+                          ) : null}
+                          {!product.image ? (
+                            <span className="rounded-full bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-600">
+                              Sem foto
+                            </span>
+                          ) : null}
 
                           <button
                             type="button"

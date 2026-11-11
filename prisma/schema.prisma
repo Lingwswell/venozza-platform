@@ -51,6 +51,7 @@ model Store {
   orders                    Order[]
   productStores             ProductStore[]
   storeOptionAvailabilities StoreOptionAvailability[]
+  settings                  StoreSettings?
 
   @@unique([tenantId, slug])
   @@index([tenantId])
@@ -115,6 +116,33 @@ model Product {
   productOptionGroups ProductOptionGroup[]
 }
 
+// Regras operacionais da loja. Tudo que o app/site/checkout precisa saber
+// sobre a loja (aberta?, frete, pedido minimo, pagamentos, horarios) vem daqui.
+model StoreSettings {
+  id                     String   @id @default(cuid())
+  storeId                String   @unique
+  manualClosed           Boolean  @default(false)
+  closedMessage          String?
+  timezone               String   @default("America/Sao_Paulo")
+  openingHours           Json?
+  deliveryTimeMinMinutes Int      @default(30)
+  deliveryTimeMaxMinutes Int      @default(45)
+  minimumOrderCents      Int      @default(0)
+  deliveryFeeCents       Int      @default(500)
+  freeDeliveryAboveCents Int?
+  whatsapp               String?
+  paymentPix             Boolean  @default(true)
+  paymentCash            Boolean  @default(true)
+  paymentCredit          Boolean  @default(false)
+  paymentDebit           Boolean  @default(false)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@map("store_settings")
+}
+
 model ProductStore {
   id          String   @id @default(cuid())
   productId   String
@@ -122,6 +150,7 @@ model ProductStore {
   available   Boolean  @default(true)
   stock       Int      @default(0)
   price_cents Int?
+  featured    Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

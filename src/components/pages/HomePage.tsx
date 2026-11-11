@@ -2,479 +2,341 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { Clock3, MapPin, MessageCircle, Search, ShoppingBag, Wallet } from "lucide-react";
+import { addToCart, getCartCountByStore, purgeLegacyCartItems } from "@/lib/cart-storage";
+import { ensureMobileStoreContext } from "@/lib/mobile-store-context";
+import { normalizeText } from "@/lib/catalog/category";
+import {
+  formatDeliveryWindow,
+  pickFeatured,
+  productImage,
+  useStoreCatalog,
+  type CatalogProduct,
+} from "@/lib/catalog/use-store-catalog";
 
-const categories = [
-  { id: "pizzas", name: "Pizzas", icon: "🍕" },
-  { id: "combos", name: "Combos", icon: "🔥" },
-  { id: "bebidas", name: "Bebidas", icon: "🥤" },
-  { id: "sobremesas", name: "Sobremesas", icon: "🍰" },
-  { id: "extras", name: "Extras", icon: "🍟" },
-];
+// Site (versao desktop). Mesma fonte de dados do app: /api/catalog.
+// Nenhum produto, preco, promocao ou nota fica escrito aqui.
 
-const promoCards = [
-  {
-    title: "2 pizzas + refri",
-    subtitle: "Oferta especial do dia",
-    tag: "Até 25% OFF",
-  },
-  {
-    title: "Frete promocional",
-    subtitle: "Entrega com valor reduzido",
-    tag: "Hoje",
-  },
-  {
-    title: "Cupom VENOZZA10",
-    subtitle: "Ganhe desconto no primeiro pedido",
-    tag: "Novo cliente",
-  },
-];
+function money(cents: number) {
+  return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
 
-const products = [
-  {
-    id: 1,
-    section: "pizzas",
-    name: "Margherita Basil",
-    description: "Molho da casa, muçarela, tomate e manjericão fresco.",
-    price: "R$ 49,90",
-    badge: "Mais pedida",
-    image:
-      "https://images.unsplash.com/photo-1604382355076-af4b0eb60143?q=80&w=1200&auto=format&fit=crop",
-    rating: "5.0",
-    time: "25-35 min",
-  },
-  {
-    id: 2,
-    section: "pizzas",
-    name: "Pepperoni Clássica",
-    description: "Pepperoni marcante com borda dourada e muito queijo.",
-    price: "R$ 57,90",
-    badge: "Bestseller",
-    image:
-      "https://images.unsplash.com/photo-1628840042765-356cda07504e?q=80&w=1200&auto=format&fit=crop",
-    rating: "4.8",
-    time: "25-35 min",
-  },
-  {
-    id: 3,
-    section: "combos",
-    name: "Combo Família",
-    description: "2 pizzas grandes + refrigerante 2L.",
-    price: "R$ 79,90",
-    badge: "Promoção",
-    image:
-      "https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=1200&auto=format&fit=crop",
-    rating: "4.9",
-    time: "30-40 min",
-  },
-  {
-    id: 4,
-    section: "bebidas",
-    name: "Coca-Cola 2L",
-    description: "Gelada, perfeita para acompanhar seu pedido.",
-    price: "R$ 12,90",
-    badge: "Bebida",
-    image:
-      "https://images.unsplash.com/photo-1629203432180-71e9b70c6f18?q=80&w=1200&auto=format&fit=crop",
-    rating: "4.7",
-    time: "20-30 min",
-  },
-  {
-    id: 5,
-    section: "sobremesas",
-    name: "Pizza Doce de Chocolate",
-    description: "Cobertura cremosa com toque especial da casa.",
-    price: "R$ 34,90",
-    badge: "Doce",
-    image:
-      "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?q=80&w=1200&auto=format&fit=crop",
-    rating: "4.8",
-    time: "25-35 min",
-  },
-  {
-    id: 6,
-    section: "extras",
-    name: "Batata Premium",
-    description: "Crocante por fora, macia por dentro.",
-    price: "R$ 18,90",
-    badge: "Extra",
-    image:
-      "https://images.unsplash.com/photo-1630384060421-cb20d0e0649d?q=80&w=1200&auto=format&fit=crop",
-    rating: "4.6",
-    time: "20-30 min",
-  },
-];
-
-const sections = [
-  { id: "pizzas", title: "Pizzas em destaque" },
-  { id: "combos", title: "Combos e promoções" },
-  { id: "bebidas", title: "Bebidas" },
-  { id: "sobremesas", title: "Sobremesas" },
-  { id: "extras", title: "Extras" },
-];
+// Pizzas abrem a pagina do produto para escolher tamanho/borda; o resto vai direto ao carrinho.
+function needsChoice(product: CatalogProduct) {
+  return product.category === "pizza" || product.customizationType !== "auto";
+}
 
 export function HomePage() {
-  const [activeCategory, setActiveCategory] = useState("pizzas");
-
-  const sectionIds = useMemo(() => sections.map((section) => section.id), []);
+  const { catalog, loading, error } = useStoreCatalog();
+  const [search, setSearch] = useState("");
+  const [cartCount, setCartCount] = useState(0);
+  const [addedId, setAddedId] = useState<string | null>(null);
 
   useEffect(() => {
-    const handleScroll = () => {
-      let current = sectionIds[0];
+    const store = ensureMobileStoreContext();
+    purgeLegacyCartItems();
+    setCartCount(getCartCountByStore(store.storeId));
+  }, []);
 
-      for (const id of sectionIds) {
-        const el = document.getElementById(id);
-        if (!el) continue;
+  const categories = useMemo(
+    () => (catalog?.categories || []).filter((c) => c.showInSite),
+    [catalog]
+  );
 
-        const rect = el.getBoundingClientRect();
-        if (rect.top <= 180) {
-          current = id;
-        }
-      }
+  const products = useMemo(() => {
+    const keys = new Set(categories.map((c) => c.key));
+    const term = normalizeText(search);
+    return (catalog?.products || []).filter(
+      (p) =>
+        keys.has(p.category) &&
+        (!term || normalizeText(`${p.name} ${p.description || ""}`).includes(term))
+    );
+  }, [catalog, categories, search]);
 
-      setActiveCategory(current);
-    };
+  const featured = useMemo(
+    () => pickFeatured(products.length ? products : catalog?.products || [], 4),
+    [products, catalog]
+  );
 
-    handleScroll();
-    window.addEventListener("scroll", handleScroll, { passive: true });
+  function handleAdd(product: CatalogProduct) {
+    const store = ensureMobileStoreContext();
+    addToCart({
+      id: product.id,
+      name: product.name,
+      quantity: 1,
+      price_cents: product.price_cents,
+      image: productImage(product),
+      tenantId: store.tenantId,
+      storeId: store.storeId,
+    });
+    setCartCount(getCartCountByStore(store.storeId));
+    setAddedId(product.id);
+    setTimeout(() => setAddedId((current) => (current === product.id ? null : current)), 1500);
+  }
 
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-    };
-  }, [sectionIds]);
+  const brand = catalog?.store.brandName || "";
+  const settings = catalog?.settings;
+  const whatsappHref = settings?.whatsapp ? `https://wa.me/55${settings.whatsapp.replace(/^55/, "")}` : null;
 
   return (
     <main className="min-h-screen bg-[#fff8f2] text-[#1f1b16]">
       <header className="sticky top-0 z-50 border-b border-[#eee2d5] bg-[#fff8f2]/95 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 md:px-8">
           <div className="min-w-0">
-            <Link href="/" className="block text-2xl font-black tracking-tight text-[#b3261e]">
-              VenoZza
+            <Link href="/" className="block truncate text-2xl font-black tracking-tight text-[#b3261e]">
+              {brand || " "}
             </Link>
-            <p className="truncate text-xs text-[#6e6257] md:text-sm">
-              Delivery • Site oficial • Mais vantagens no app
-            </p>
+            {catalog ? (
+              <p className="flex items-center gap-1 truncate text-xs text-[#6e6257] md:text-sm">
+                <MapPin className="h-3.5 w-3.5 text-[#b3261e]" />
+                {catalog.store.name}
+                {catalog.store.city ? ` · ${catalog.store.city}` : ""}
+              </p>
+            ) : null}
           </div>
 
-          <div className="hidden flex-1 justify-center md:flex">
-            <div className="flex w-full max-w-xl items-center rounded-full border border-[#eadbcc] bg-white px-4 py-3 shadow-sm">
-              <span className="mr-3 text-lg">🔎</span>
+          <label className="hidden flex-1 justify-center md:flex">
+            <span className="flex w-full max-w-xl items-center gap-3 rounded-full border border-[#eadbcc] bg-white px-4 py-3 shadow-sm">
+              <Search className="h-4 w-4 text-[#b3261e]" />
               <input
-                type="text"
-                placeholder="Buscar pizzas, combos e bebidas"
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar no cardápio"
                 className="w-full border-0 bg-transparent p-0 text-sm outline-none placeholder:text-[#9b8f84]"
               />
-            </div>
-          </div>
+            </span>
+          </label>
 
-          <div className="flex items-center gap-2">
-            <Link
-              href="/m"
-              className="rounded-full border border-[#e2d2c3] bg-white px-4 py-2 text-sm font-semibold text-[#1f1b16] transition hover:bg-[#fffdfb]"
-            >
-              App
-            </Link>
-            <Link
-              href="/admin"
-              className="rounded-full bg-[#b3261e] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-            >
-              Admin
-            </Link>
-          </div>
+          <Link
+            href="/m/carrinho"
+            className="relative flex items-center gap-2 rounded-full bg-[#1f1b16] px-5 py-2.5 text-sm font-bold text-white transition hover:opacity-90"
+          >
+            <ShoppingBag className="h-4 w-4" />
+            Carrinho
+            {cartCount > 0 ? (
+              <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[#e3342a] px-1 text-[11px] font-black">
+                {cartCount}
+              </span>
+            ) : null}
+          </Link>
         </div>
 
         <div className="border-t border-[#f0e5da] px-4 py-3 md:hidden">
-          <div className="mx-auto flex max-w-7xl items-center rounded-full border border-[#eadbcc] bg-white px-4 py-3 shadow-sm">
-            <span className="mr-3 text-lg">🔎</span>
+          <label className="mx-auto flex max-w-7xl items-center gap-3 rounded-full border border-[#eadbcc] bg-white px-4 py-3 shadow-sm">
+            <Search className="h-4 w-4 text-[#b3261e]" />
             <input
-              type="text"
-              placeholder="Buscar pizzas, combos e bebidas"
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar no cardápio"
               className="w-full border-0 bg-transparent p-0 text-sm outline-none placeholder:text-[#9b8f84]"
             />
-          </div>
+          </label>
         </div>
+
+        {categories.length > 1 && !search ? (
+          <nav className="mx-auto flex max-w-7xl gap-2 overflow-x-auto px-4 pb-3 md:px-8 [scrollbar-width:none]">
+            {categories.map((cat) => (
+              <a
+                key={cat.key}
+                href={`#cat-${cat.key}`}
+                className="shrink-0 rounded-full border border-[#eadbcc] bg-white px-4 py-2 text-sm font-semibold text-[#3d342c] transition hover:border-[#b3261e] hover:text-[#b3261e]"
+              >
+                {cat.icon} {cat.label}
+              </a>
+            ))}
+          </nav>
+        ) : null}
       </header>
 
-      <section className="mx-auto max-w-7xl px-4 pt-5 md:px-8 md:pt-8">
-        <div className="overflow-hidden rounded-[28px] bg-gradient-to-r from-[#b3261e] via-[#ce3828] to-[#f05a2a] shadow-[0_20px_60px_rgba(179,38,30,0.22)]">
-          <div className="grid items-center gap-6 md:grid-cols-2">
-            <div className="p-6 md:p-10">
-              <span className="inline-block rounded-full bg-white/15 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-white">
-                Oferta da casa
-              </span>
-              <h1 className="mt-4 text-4xl font-black leading-none tracking-tight text-white md:text-6xl">
-                Peça direto
-                <br />
-                na VenoZza
-              </h1>
-              <p className="mt-4 max-w-xl text-sm leading-relaxed text-white/90 md:text-lg">
-                Layout mais comercial, mais forte para conversão e pronto para evoluir
-                para catálogo, banners, cupom e multi-loja.
-              </p>
-
-              <div className="mt-6 flex flex-wrap gap-3">
-                <Link
-                  href="/m"
-                  className="rounded-full bg-white px-6 py-3 text-sm font-black text-[#b3261e] shadow-lg transition hover:-translate-y-0.5"
-                >
-                  Pedir agora
-                </Link>
-                <a
-                  href="#categorias"
-                  className="rounded-full border border-white/30 bg-white/10 px-6 py-3 text-sm font-bold text-white backdrop-blur transition hover:bg-white/20"
-                >
-                  Ver cardápio
-                </a>
-              </div>
-            </div>
-
-            <div className="relative h-[280px] md:h-[420px]">
-              <img
-                src="https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=1600&auto=format&fit=crop"
-                alt="Pizza em destaque VenoZza"
-                className="h-full w-full object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-l from-transparent to-[#000]/15" />
-            </div>
+      <div className="mx-auto max-w-7xl px-4 pb-28 pt-6 md:px-8">
+        {catalog && !catalog.status.open ? (
+          <div className="mb-6 rounded-3xl border border-[#ffd2cc] bg-[#fff1ef] px-6 py-4 text-base font-bold text-[#b3261e]">
+            {catalog.status.message}
           </div>
-        </div>
-      </section>
+        ) : null}
 
-      <section className="mx-auto max-w-7xl px-4 py-6 md:px-8">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          {promoCards.map((promo) => (
-            <div
-              key={promo.title}
-              className="rounded-3xl border border-[#f0e3d7] bg-white p-5 shadow-sm transition hover:shadow-md"
-            >
-              <span className="inline-block rounded-full bg-[#fff1ef] px-3 py-1 text-[11px] font-black uppercase tracking-widest text-[#b3261e]">
-                {promo.tag}
+        {settings ? (
+          <section className="mb-8 flex flex-wrap gap-3 text-sm font-semibold text-[#5f5348]">
+            <span className="flex items-center gap-2 rounded-full bg-white px-4 py-2 shadow-sm">
+              <Clock3 className="h-4 w-4 text-[#b3261e]" />
+              Entrega em {formatDeliveryWindow(settings)}
+            </span>
+            <span className="rounded-full bg-white px-4 py-2 shadow-sm">
+              Taxa de entrega: {settings.deliveryFeeCents > 0 ? money(settings.deliveryFeeCents) : "grátis"}
+              {settings.freeDeliveryAboveCents ? ` · grátis acima de ${money(settings.freeDeliveryAboveCents)}` : ""}
+            </span>
+            {settings.minimumOrderCents > 0 ? (
+              <span className="rounded-full bg-white px-4 py-2 shadow-sm">
+                Pedido mínimo: {money(settings.minimumOrderCents)}
               </span>
-              <h3 className="mt-3 text-lg font-black tracking-tight text-[#1f1b16]">
-                {promo.title}
-              </h3>
-              <p className="mt-1 text-sm text-[#6e6257]">{promo.subtitle}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section
-        id="categorias"
-        className="sticky top-[73px] z-40 border-y border-[#f1e6db] bg-[#fff8f2]/95 backdrop-blur md:top-[81px]"
-      >
-        <div className="mx-auto max-w-7xl overflow-x-auto px-4 py-3 md:px-8">
-          <div className="flex min-w-max gap-3">
-            {categories.map((category) => {
-              const isActive = activeCategory === category.id;
-
-              return (
-                <a
-                  key={category.id}
-                  href={`#${category.id}`}
-                  className={[
-                    "rounded-full px-4 py-2 text-sm font-bold shadow-sm transition",
-                    isActive
-                      ? "border border-[#b3261e] bg-[#b3261e] text-white"
-                      : "border border-[#eadbcc] bg-white text-[#3c342d] hover:border-[#b3261e] hover:text-[#b3261e]",
-                  ].join(" ")}
-                >
-                  <span className="mr-2">{category.icon}</span>
-                  {category.name}
-                </a>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-7xl px-4 py-8 md:px-8">
-        <div className="mb-8 rounded-3xl border border-[#f0e3d7] bg-white p-5 shadow-sm md:p-6">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#b3261e]">
-                Loja oficial
-              </p>
-              <h2 className="mt-1 text-2xl font-black tracking-tight text-[#1f1b16]">
-                VenoZza Delivery
-              </h2>
-              <p className="mt-1 text-sm text-[#6e6257]">
-                Pizza artesanal • Entrega rápida • Mais vantagens pedindo direto
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-3 text-sm">
-              <span className="rounded-full bg-[#f7f2ec] px-4 py-2 font-bold text-[#3c342d]">
-                ⭐ 4.9 de avaliação
+            ) : null}
+            {catalog?.paymentMethods.length ? (
+              <span className="flex items-center gap-2 rounded-full bg-white px-4 py-2 shadow-sm">
+                <Wallet className="h-4 w-4 text-[#b3261e]" />
+                {catalog.paymentMethods.map((m) => m.label).join(" · ")}
               </span>
-              <span className="rounded-full bg-[#f7f2ec] px-4 py-2 font-bold text-[#3c342d]">
-                ⏱️ 25-35 min
-              </span>
-              <span className="rounded-full bg-[#f7f2ec] px-4 py-2 font-bold text-[#3c342d]">
-                🛵 Entrega disponível
-              </span>
-            </div>
-          </div>
-        </div>
+            ) : null}
+            {whatsappHref ? (
+              <a
+                href={whatsappHref}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-2 rounded-full bg-white px-4 py-2 shadow-sm hover:text-[#b3261e]"
+              >
+                <MessageCircle className="h-4 w-4 text-[#1f9d55]" />
+                WhatsApp
+              </a>
+            ) : null}
+          </section>
+        ) : null}
 
-        {sections.map((section) => {
-          const items = products.filter((product) => product.section === section.id);
-
-          if (!items.length) return null;
-
-          return (
-            <section key={section.id} id={section.id} className="mb-10 scroll-mt-40">
-              <div className="mb-5 flex items-center justify-between gap-4">
-                <h3 className="text-2xl font-black tracking-tight text-[#1f1b16]">
-                  {section.title}
-                </h3>
-                <Link
-                  href="/m"
-                  className="text-sm font-black text-[#b3261e] hover:underline"
-                >
-                  Ver tudo
-                </Link>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                {items.map((product) => (
-                  <article
-                    key={product.id}
-                    className="overflow-hidden rounded-3xl border border-[#f0e3d7] bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                  >
-                    <div className="flex h-full flex-col md:flex-row">
-                      <div className="relative h-52 w-full md:h-auto md:w-[220px]">
-                        <img
-                          src={product.image}
-                          alt={product.name}
-                          className="h-full w-full object-cover"
-                        />
-                        <span className="absolute left-3 top-3 rounded-full bg-[#b3261e] px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white">
-                          {product.badge}
-                        </span>
+        {loading ? (
+          <p className="rounded-3xl bg-white p-6 text-sm font-semibold text-[#6e6257] shadow-sm">Carregando cardápio...</p>
+        ) : error ? (
+          <p className="rounded-3xl border border-red-200 bg-red-50 p-6 text-sm font-semibold text-red-700">{error}</p>
+        ) : (
+          <>
+            {featured.length > 0 && !search ? (
+              <section className="mb-12">
+                <h2 className="mb-4 text-2xl font-black tracking-tight">Destaques</h2>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  {featured.map((product, index) => (
+                    <Link
+                      key={product.id}
+                      href={`/m/produto/${product.id}`}
+                      className={[
+                        "group relative overflow-hidden rounded-[28px] bg-[#1f1b16] text-white shadow-[0_18px_45px_rgba(31,27,22,0.18)]",
+                        index === 0 ? "md:col-span-2 md:row-span-2" : "",
+                      ].join(" ")}
+                    >
+                      <img
+                        src={productImage(product)}
+                        alt={product.name}
+                        className={[
+                          "w-full object-cover opacity-90 transition group-hover:scale-[1.03]",
+                          index === 0 ? "h-64 md:h-full md:min-h-[340px]" : "h-44",
+                        ].join(" ")}
+                      />
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-5">
+                        <p className={index === 0 ? "text-2xl font-black" : "text-lg font-black"}>{product.name}</p>
+                        <p className="mt-1 text-sm font-bold text-[#ffd2a8]">{money(product.price_cents)}</p>
                       </div>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            ) : null}
 
-                      <div className="flex flex-1 flex-col p-5">
-                        <div className="flex items-start justify-between gap-4">
+            {search ? (
+              <p className="mb-6 text-sm font-semibold text-[#6e6257]">
+                {products.length} resultado{products.length === 1 ? "" : "s"} para “{search}”
+              </p>
+            ) : null}
+
+            {categories.length === 0 ? (
+              <p className="rounded-3xl bg-white p-6 text-sm font-semibold text-[#6e6257] shadow-sm">
+                Nenhum produto disponível nesta loja no momento.
+              </p>
+            ) : (
+              categories.map((cat) => {
+                const items = products.filter((p) => p.category === cat.key);
+                if (items.length === 0) return null;
+
+                return (
+                  <section key={cat.key} id={`cat-${cat.key}`} className="mb-12 scroll-mt-40">
+                    <h2 className="mb-4 text-2xl font-black tracking-tight">
+                      {cat.icon} {cat.label}
+                    </h2>
+
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                      {cat.key === "pizza" && !search ? (
+                        <Link
+                          href="/m/meio-a-meio"
+                          className="flex flex-col justify-between rounded-[24px] border border-dashed border-[#e7b9a6] bg-[#fff1ea] p-5 transition hover:border-[#b3261e]"
+                        >
+                          <span className="text-4xl">🍕</span>
                           <div>
-                            <h4 className="text-xl font-black tracking-tight text-[#1f1b16]">
-                              {product.name}
-                            </h4>
-                            <p className="mt-2 text-sm leading-relaxed text-[#6e6257]">
-                              {product.description}
-                            </p>
+                            <h3 className="mt-4 text-lg font-black">Pizza meio a meio</h3>
+                            <p className="mt-1 text-sm text-[#6e6257]">Monte sua pizza com 2 sabores.</p>
+                            <span className="mt-4 inline-block rounded-full bg-[#b3261e] px-4 py-2 text-sm font-bold text-white">
+                              Montar
+                            </span>
                           </div>
-                          <span className="shrink-0 rounded-full bg-[#f7f2ec] px-3 py-1 text-xs font-black text-[#3c342d]">
-                            ⭐ {product.rating}
-                          </span>
-                        </div>
+                        </Link>
+                      ) : null}
 
-                        <div className="mt-5 flex flex-wrap items-center gap-3 text-xs font-bold text-[#6e6257]">
-                          <span className="rounded-full bg-[#f7f2ec] px-3 py-1">
-                            {product.time}
-                          </span>
-                          <span className="rounded-full bg-[#f7f2ec] px-3 py-1">
-                            Pedido online
-                          </span>
-                        </div>
-
-                        <div className="mt-auto flex items-center justify-between gap-4 pt-6">
-                          <span className="text-2xl font-black text-[#1f1b16]">
-                            {product.price}
-                          </span>
-
-                          <Link
-                            href="/m"
-                            className="rounded-full bg-[#b3261e] px-5 py-3 text-sm font-black text-white transition hover:opacity-90"
-                          >
-                            Pedir agora
+                      {items.map((product) => (
+                        <article
+                          key={product.id}
+                          className="flex flex-col overflow-hidden rounded-[24px] border border-[#efe2d6] bg-white shadow-sm transition hover:shadow-md"
+                        >
+                          <Link href={`/m/produto/${product.id}`}>
+                            <img
+                              src={productImage(product)}
+                              alt={product.name}
+                              className="h-44 w-full bg-[#fff4ef] object-cover"
+                            />
                           </Link>
-                        </div>
-                      </div>
+                          <div className="flex flex-1 flex-col p-4">
+                            <h3 className="text-base font-black leading-tight">{product.name}</h3>
+                            {product.description ? (
+                              <p className="mt-1 line-clamp-2 text-sm text-[#6e6257]">{product.description}</p>
+                            ) : null}
+                            <div className="mt-auto flex items-center justify-between gap-3 pt-4">
+                              <span className="text-lg font-black text-[#b3261e]">{money(product.price_cents)}</span>
+                              {needsChoice(product) ? (
+                                <Link
+                                  href={`/m/produto/${product.id}`}
+                                  className="rounded-full bg-[#b3261e] px-4 py-2 text-sm font-bold text-white transition hover:opacity-90"
+                                >
+                                  Escolher
+                                </Link>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleAdd(product)}
+                                  className="rounded-full bg-[#b3261e] px-4 py-2 text-sm font-bold text-white transition hover:opacity-90"
+                                >
+                                  {addedId === product.id ? "Adicionado ✓" : "Adicionar"}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </article>
+                      ))}
                     </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-          );
-        })}
-      </section>
-
-      <section className="mx-auto max-w-7xl px-4 pb-24 md:px-8">
-        <div className="rounded-[28px] bg-[#1f1b16] p-6 text-white md:p-8">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#ffb4ab]">
-                Vantagem oficial
-              </p>
-              <h3 className="mt-2 text-3xl font-black tracking-tight">
-                Peça pelo app da VenoZza
-              </h3>
-              <p className="mt-2 max-w-2xl text-sm text-white/80 md:text-base">
-                Mais controle da experiência, mais autonomia para a marca e estrutura
-                pronta para crescer para multi-loja, cupom, campanhas e fidelização.
-              </p>
-            </div>
-
-            <Link
-              href="/m"
-              className="rounded-full bg-white px-6 py-3 text-sm font-black text-[#b3261e] transition hover:-translate-y-0.5"
-            >
-              Ir para o app
-            </Link>
-          </div>
-        </div>
-      </section>
+                  </section>
+                );
+              })
+            )}
+          </>
+        )}
+      </div>
 
       <footer className="border-t border-[#eee2d5] bg-[#fff3e9]">
-        <div className="mx-auto grid max-w-7xl grid-cols-1 gap-8 px-4 py-12 md:grid-cols-2 md:px-8">
-          <div>
-            <h4 className="text-xl font-black tracking-tight text-[#1f1b16]">VenoZza</h4>
-            <p className="mt-3 max-w-md text-sm leading-relaxed text-[#6e6257]">
-              Estrutura visual mais forte para conversão, com cara de marketplace,
-              mas mantendo sua marca própria no centro da operação.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-8">
-            <div>
-              <h5 className="mb-3 text-sm font-black uppercase tracking-widest text-[#1f1b16]">
-                Navegação
-              </h5>
-              <div className="space-y-2 text-sm text-[#6e6257]">
-                <a className="block hover:text-[#b3261e]" href="#categorias">Categorias</a>
-                <Link className="block hover:text-[#b3261e]" href="/m">App</Link>
-                <Link className="block hover:text-[#b3261e]" href="/admin">Admin</Link>
-              </div>
-            </div>
-
-            <div>
-              <h5 className="mb-3 text-sm font-black uppercase tracking-widest text-[#1f1b16]">
-                Institucional
-              </h5>
-              <div className="space-y-2 text-sm text-[#6e6257]">
-                <a className="block hover:text-[#b3261e]" href="#">Privacidade</a>
-                <a className="block hover:text-[#b3261e]" href="#">Termos</a>
-                <a className="block hover:text-[#b3261e]" href="#">Contato</a>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="border-t border-[#eee2d5] px-4 py-6 md:px-8">
-          <div className="mx-auto max-w-7xl text-xs uppercase tracking-wide text-[#84786d]">
-            © 2026 VenoZza Platform. Todos os direitos reservados.
+        <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-8 text-sm text-[#6e6257] md:flex-row md:items-center md:justify-between md:px-8">
+          <span>
+            © {new Date().getFullYear()} {brand}
+          </span>
+          <div className="flex gap-4">
+            <Link href="/m" className="hover:text-[#b3261e]">Abrir no celular</Link>
+            <Link href="/admin/login" className="hover:text-[#b3261e]">Área do lojista</Link>
           </div>
         </div>
       </footer>
 
-      <div className="fixed bottom-4 left-0 right-0 z-50 px-4 md:hidden">
-        <Link
-          href="/m"
-          className="flex items-center justify-center rounded-full bg-[#b3261e] px-6 py-4 text-sm font-black text-white shadow-[0_20px_50px_rgba(179,38,30,0.35)]"
-        >
-          Pedir agora no app
-        </Link>
-      </div>
+      {cartCount > 0 ? (
+        <div className="fixed bottom-4 left-0 right-0 z-50 px-4 md:hidden">
+          <Link
+            href="/m/carrinho"
+            className="flex items-center justify-center rounded-full bg-[#b3261e] px-6 py-4 text-sm font-black text-white shadow-[0_20px_50px_rgba(179,38,30,0.35)]"
+          >
+            Ver carrinho ({cartCount})
+          </Link>
+        </div>
+      ) : null}
     </main>
   );
 }
