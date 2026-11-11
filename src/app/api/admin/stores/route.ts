@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
 import { getAdminScope, scopeErrorResponse } from "@/lib/auth/scope";
 import { can, isMultiStoreRole } from "@/lib/auth/roles";
@@ -94,6 +95,43 @@ export async function POST(req: Request) {
           // Copia preco, disponibilidade, destaque e estoque; a loja nova ajusta depois.
           await tx.productStore.createMany({
             data: rows.map((row) => ({ ...row, storeId: created.id })),
+          });
+        }
+
+        // Opcoes (tamanho, borda, massa, bebidas): copia precos proprios e o que estiver desligado.
+        const optionRows = await tx.storeOptionAvailability.findMany({
+          where: { storeId: source.id },
+          select: { optionItemId: true, available: true, stock: true, price_cents: true },
+        });
+        if (optionRows.length > 0) {
+          await tx.storeOptionAvailability.createMany({
+            data: optionRows.map((row) => ({ ...row, storeId: created.id })),
+          });
+        }
+
+        // Configuracoes (horario, taxa, pedido minimo, pagamentos); a loja comeca aberta.
+        const settings = await tx.storeSettings.findUnique({ where: { storeId: source.id } });
+        if (settings) {
+          await tx.storeSettings.create({
+            data: {
+              storeId: created.id,
+              manualClosed: false,
+              closedMessage: settings.closedMessage,
+              timezone: settings.timezone,
+              ...(settings.openingHours !== null
+                ? { openingHours: settings.openingHours as Prisma.InputJsonValue }
+                : {}),
+              deliveryTimeMinMinutes: settings.deliveryTimeMinMinutes,
+              deliveryTimeMaxMinutes: settings.deliveryTimeMaxMinutes,
+              minimumOrderCents: settings.minimumOrderCents,
+              deliveryFeeCents: settings.deliveryFeeCents,
+              freeDeliveryAboveCents: settings.freeDeliveryAboveCents,
+              whatsapp: settings.whatsapp,
+              paymentPix: settings.paymentPix,
+              paymentCash: settings.paymentCash,
+              paymentCredit: settings.paymentCredit,
+              paymentDebit: settings.paymentDebit,
+            },
           });
         }
       }

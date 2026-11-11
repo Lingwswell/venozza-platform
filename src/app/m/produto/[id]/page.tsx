@@ -804,7 +804,13 @@ export default function MobileProductPage() {
           </div>
         </section>
 
-        {isPizza ? (
+        {isPizza && sizeOptions.length === 0 ? (
+          <section className="mt-5 rounded-[28px] border border-[#ffd2cc] bg-[#fff1ef] p-4 text-sm font-bold text-[#b3261e]">
+            Esta loja ainda não tem tamanhos de pizza cadastrados. Avise a loja ou escolha outra loja.
+          </section>
+        ) : null}
+
+        {isPizza && sizeOptions.length > 0 ? (
           <section className="mt-5 rounded-[28px] border border-[#eadfda] bg-white p-4 shadow-sm">
             <div className="mb-3">
               <h2 className="text-lg font-black">Escolha o tamanho</h2>
@@ -889,7 +895,7 @@ export default function MobileProductPage() {
           </section>
         ) : null}
 
-        {isPizza || isBatata ? (
+        {(isPizza || isBatata) && customizationOptions.length > 0 ? (
           <section className="mt-5 rounded-[28px] border border-[#eadfda] bg-white p-4 shadow-sm">
             <div className="mb-3">
               <h2 className="text-lg font-black">
@@ -911,7 +917,7 @@ export default function MobileProductPage() {
           </section>
         ) : null}
 
-        {isPizza ? (
+        {isPizza && doughOptions.length > 0 ? (
           <section className="mt-5 rounded-[28px] border border-[#eadfda] bg-white p-4 shadow-sm">
             <div className="mb-3">
               <h2 className="text-lg font-black">Massa da pizza</h2>
@@ -931,7 +937,7 @@ export default function MobileProductPage() {
           </section>
         ) : null}
 
-        {isPizza ? (
+        {isPizza && drinkOptions.length > 0 ? (
           <section className="mt-5 rounded-[28px] border border-[#eadfda] bg-white p-4 shadow-sm">
             <div className="mb-3">
               <h2 className="text-lg font-black">Bebidas</h2>

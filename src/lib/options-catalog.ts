@@ -48,6 +48,7 @@ export function defaultCatalogOption(
 }
 
 // Le as opcoes da rede e da loja no banco. O preco da loja (se houver) vale mais que o da rede.
+// O servidor usa esta mesma funcao para cobrar o pedido: o que aparece e o que e cobrado.
 export async function loadOptionCatalog(storeId: string): Promise<OptionCatalog> {
   const store = await prisma.store.findUnique({
     where: { id: storeId },
@@ -76,8 +77,10 @@ export async function loadOptionCatalog(storeId: string): Promise<OptionCatalog>
       tenantId: store.tenantId,
       active: true,
       optionGroupId: { in: groups.map((group) => group.id) },
+      // Opcao da rede vale para todas as lojas; a loja so some com ela se a
+      // desligar explicitamente (available = false). Loja nova ja nasce completa.
       storeOptionAvailabilities: {
-        some: { storeId, available: true },
+        none: { storeId, available: false },
       },
     },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
