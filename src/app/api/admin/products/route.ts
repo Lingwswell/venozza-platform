@@ -185,7 +185,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const { tenantId, currentStoreId, role } = await getAdminContext(req);
+    const { tenantId, role } = await getAdminContext(req);
 
     // Cadastro do cardapio e da rede: so dono da rede / super_admin.
     if (role === "operator") {
@@ -224,13 +224,11 @@ export async function POST(req: Request) {
     const image = body.image ? String(body.image).trim() : null;
     const available = body.available !== false;
 
-    const createForAllStores = body.allStores === true && role !== "operator";
+    // Aqui so chega dono da rede / super_admin (usuario de loja ja recebeu 403 acima).
+    const createForAllStores = body.allStores === true;
 
     const requestedStoreId = String(body.storeId || body.store_id || "").trim();
-    const storeId =
-      role === "operator"
-        ? String(currentStoreId || "")
-        : requestedStoreId;
+    const storeId = requestedStoreId;
 
     const priceCents = normalizePriceCents(
       typeof body.price_cents !== "undefined" ? body.price_cents : body.price
