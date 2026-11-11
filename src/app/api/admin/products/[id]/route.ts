@@ -1,53 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getAuthContextFromRequest } from "@/lib/auth/context";
-
-type AdminRole = "super_admin" | "owner" | "operator" | "customer";
-
-type AuthContext = {
-  tenantId?: string | null;
-  storeId?: string | null;
-  role?: string | null;
-};
-
-function normalizeRole(role: string | null | undefined): AdminRole {
-  if (role === "super_admin") return "super_admin";
-  if (role === "owner") return "owner";
-  if (role === "operator") return "operator";
-  return "customer";
-}
+import { getLegacyAdminContext } from "@/lib/auth/admin-context";
+import { scopeErrorResponse } from "@/lib/auth/scope";
 
 async function getAdminContext(req: Request) {
-  let auth: AuthContext = {};
-
-  try {
-    auth = await getAuthContextFromRequest(req);
-  } catch (error) {
-    console.warn("[api/admin/products/:id][auth fallback]", error);
-    auth = {};
-  }
-
-  const headerTenantId = req.headers.get("x-tenant-id");
-  const headerStoreId = req.headers.get("x-store-id");
-  const headerRole = normalizeRole(req.headers.get("x-user-role"));
-
-  const authRole = normalizeRole(auth.role);
-
-  const tenantId = auth.tenantId || headerTenantId;
-  const currentStoreId = auth.storeId || headerStoreId;
-
-  const role =
-    authRole !== "customer"
-      ? authRole
-      : headerRole !== "customer"
-        ? headerRole
-        : authRole;
-
-  return {
-    tenantId,
-    currentStoreId,
-    role,
-  };
+  // Permissao vem so do token validado + banco (nunca de cabecalhos do navegador).
+  return getLegacyAdminContext(req);
 }
 
 function normalizePriceCents(value: unknown) {
@@ -94,7 +52,7 @@ export async function PATCH(
 ) {
   try {
     const { id } = await context.params;
-    const { tenantId, currentStoreId, role } = await getAdminContext(req);
+    const { tenantId, currentStoreId, role, scope } = await getAdminContext(req);
 
     if (!tenantId) {
       return NextResponse.json(
@@ -123,6 +81,7 @@ export async function PATCH(
       select: {
         id: true,
         storeId: true,
+        tenantId: true,
       },
     });
 
@@ -136,34 +95,21 @@ export async function PATCH(
       );
     }
 
-    const currentProductStore = await prisma.store.findFirst({
-      where: {
-        id: currentProduct.storeId,
-        tenantId,
-        active: true,
-      },
-      select: {
-        id: true,
-      },
-    });
+    // Produto precisa ser da rede do usuario.
+    const belongsToTenant = currentProduct.tenantId
+      ? currentProduct.tenantId === tenantId
+      : !!(await prisma.store.findFirst({
+          where: { id: currentProduct.storeId, tenantId },
+          select: { id: true },
+        }));
 
-    if (!currentProductStore) {
+    if (!belongsToTenant) {
       return NextResponse.json(
         {
           ok: false,
           error: "Produto não pertence a este tenant",
         },
         { status: 404 }
-      );
-    }
-
-    if (role === "operator" && currentProduct.storeId !== currentStoreId) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Operador não pode editar produto de outra loja",
-        },
-        { status: 403 }
       );
     }
 
@@ -183,7 +129,20 @@ export async function PATCH(
       body.storeId || body.store_id || currentProduct.storeId
     ).trim();
 
-    const storeId = role === "operator" ? currentProduct.storeId : requestedStoreId;
+    // Usuario de loja: so mexe no preco/estoque/disponibilidade das lojas dele.
+    const storeId =
+      role === "operator"
+        ? scope.storeIds.includes(requestedStoreId)
+          ? requestedStoreId
+          : currentStoreId || ""
+        : requestedStoreId;
+
+    if (role === "operator" && !scope.storeIds.includes(storeId)) {
+      return NextResponse.json(
+        { ok: false, error: "Você não tem acesso a esta loja." },
+        { status: 403 }
+      );
+    }
 
     const priceCents = normalizePriceCents(
       typeof body.price_cents !== "undefined" ? body.price_cents : body.price
@@ -242,21 +201,27 @@ export async function PATCH(
       );
     }
 
+    // Dono da rede edita o cadastro do produto; usuario de loja so a parte da loja
+    // (preco, estoque, disponibilidade, destaque) — o cadastro central fica igual.
     const [product, productStore] = await prisma.$transaction([
       prisma.product.update({
         where: {
           id,
         },
-        data: {
-          name,
-          category,
-          customizationType,
-          description,
-          image,
-          available,
-          price_cents: priceCents,
-          storeId: targetStore.id,
-        },
+        data:
+          role === "operator"
+            ? {}
+            : {
+                tenantId,
+                name,
+                category,
+                customizationType,
+                description,
+                image,
+                available,
+                price_cents: priceCents,
+                storeId: targetStore.id,
+              },
         select: {
           id: true,
           name: true,
@@ -325,6 +290,8 @@ export async function PATCH(
       },
     });
   } catch (error) {
+    const scoped = scopeErrorResponse(error);
+    if (scoped) return scoped;
     console.error("[api/admin/products/:id][PATCH]", error);
 
     return NextResponse.json(

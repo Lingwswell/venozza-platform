@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getAuthContextFromRequest } from "@/lib/auth/context";
+import { getAdminScope, scopeErrorResponse, storeFilter } from "@/lib/auth/scope";
 
 type RangeKey =
   | "last7days"
@@ -118,7 +118,8 @@ async function getSummary(where: Record<string, unknown>) {
 
 export async function GET(req: Request) {
   try {
-    const auth = await getAuthContextFromRequest(req);
+    const scope = await getAdminScope(req);
+    const auth = { tenantId: scope.tenantId };
 
     if (!auth.tenantId) {
       return NextResponse.json(
@@ -134,13 +135,13 @@ export async function GET(req: Request) {
     const { start, end } = buildRange(range);
     const previous = buildPreviousRange(range, start);
 
-    const role = String(auth.role || "").toLowerCase();
-    const effectiveStoreId =
-      role === "owner" ? requestedStoreId : auth.storeId || null;
+    // Loja pedida precisa estar no escopo; sem loja = todas as lojas que o usuario acessa.
+    const effectiveStoreId = requestedStoreId;
+    const scopeFilter = storeFilter(scope, effectiveStoreId);
 
     const baseWhere = {
       tenantId: auth.tenantId,
-      ...(effectiveStoreId ? { storeId: effectiveStoreId } : {}),
+      ...scopeFilter,
       status: {
         not: "cancelado",
       },
@@ -222,6 +223,8 @@ export async function GET(req: Request) {
       })),
     });
   } catch (error) {
+    const scoped = scopeErrorResponse(error);
+    if (scoped) return scoped;
     console.error("[api/admin/financeiro/daily][GET]", error);
 
     return NextResponse.json(

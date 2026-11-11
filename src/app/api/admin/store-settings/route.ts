@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
-import { getAuthContextFromRequest, type AuthContext } from "@/lib/auth/context";
+import { canAccessStore, getAdminScope, scopeErrorResponse } from "@/lib/auth/scope";
+import { can } from "@/lib/auth/roles";
 import {
   OPERATOR_FIELDS,
   SettingsValidationError,
@@ -11,61 +12,40 @@ import {
 } from "@/lib/store/settings";
 import { enabledPaymentMethods, getOpenStatus } from "@/lib/store/settings-shared";
 
-const MANAGER_ROLES = ["super_admin", "owner", "admin"];
-
 function fail(error: string, status: number) {
   return NextResponse.json({ ok: false, error }, { status });
 }
 
-async function getAuth(req: Request): Promise<AuthContext | null> {
-  try {
-    return await getAuthContextFromRequest(req);
-  } catch {
-    return null;
-  }
-}
-
 /**
- * Descobre qual loja o usuario pode ver/editar.
- * - operator: sempre a propria loja
- * - owner/admin/super_admin: qualquer loja ativa do proprio tenant
+ * Loja que o usuario quer ver/editar (pedida ou a principal), dentro do escopo dele.
+ * Quem nao pode editar tudo (operador) so abre/fecha a loja.
  */
-async function resolveStore(auth: AuthContext, requestedStoreId: string | null) {
-  const role = String(auth.role || "").toLowerCase();
+async function resolveStore(req: Request, requestedStoreId: string | null) {
+  const scope = await getAdminScope(req);
 
-  if (!auth.tenantId) return { error: fail("tenantId obrigatório", 400) };
-
-  if (role === "operator") {
-    if (!auth.storeId) return { error: fail("Operador sem loja vinculada", 403) };
-    if (requestedStoreId && requestedStoreId !== auth.storeId) {
-      return { error: fail("Operador não pode acessar outra loja", 403) };
-    }
-  } else if (!MANAGER_ROLES.includes(role)) {
-    return { error: fail("Acesso administrativo obrigatório", 403) };
+  if (!can.openCloseStore(scope.role)) {
+    return { error: fail("Sem permissão para configurações de loja.", 403) };
   }
 
-  const storeId = role === "operator" ? auth.storeId : requestedStoreId || auth.storeId;
+  const storeId = requestedStoreId || scope.primaryStoreId;
+  if (!canAccessStore(scope, storeId)) {
+    return { error: fail("Você não tem acesso a esta loja.", 403) };
+  }
 
   const store = await prisma.store.findFirst({
-    where: storeId
-      ? { id: storeId, tenantId: auth.tenantId, active: true }
-      : { tenantId: auth.tenantId, active: true },
-    orderBy: { name: "asc" },
+    where: { id: storeId!, tenantId: scope.tenantId },
     select: { id: true, name: true, slug: true },
   });
 
   if (!store) return { error: fail("Loja não encontrada", 404) };
 
-  return { store, role };
+  return { store, role: scope.role, canEditAll: can.editStoreSettings(scope.role) };
 }
 
 export async function GET(req: Request) {
   try {
-    const auth = await getAuth(req);
-    if (!auth) return fail("Sessão inválida. Entre novamente.", 401);
-
     const url = new URL(req.url);
-    const resolved = await resolveStore(auth, url.searchParams.get("storeId"));
+    const resolved = await resolveStore(req, url.searchParams.get("storeId"));
     if ("error" in resolved) return resolved.error;
 
     const settings = await loadStoreSettings(resolved.store.id);
@@ -73,12 +53,15 @@ export async function GET(req: Request) {
     return NextResponse.json({
       ok: true,
       role: resolved.role,
+      canEditAll: resolved.canEditAll,
       store: resolved.store,
       settings,
       status: getOpenStatus(settings),
       paymentMethods: enabledPaymentMethods(settings),
     });
   } catch (error) {
+    const scoped = scopeErrorResponse(error);
+    if (scoped) return scoped;
     console.error("[api/admin/store-settings][GET]", error);
     return fail("Erro ao carregar configurações", 500);
   }
@@ -86,18 +69,15 @@ export async function GET(req: Request) {
 
 export async function PATCH(req: Request) {
   try {
-    const auth = await getAuth(req);
-    if (!auth) return fail("Sessão inválida. Entre novamente.", 401);
-
     const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
     if (!body || typeof body !== "object") return fail("Corpo inválido", 400);
 
     const requestedStoreId = typeof body.storeId === "string" ? body.storeId : null;
-    const resolved = await resolveStore(auth, requestedStoreId);
+    const resolved = await resolveStore(req, requestedStoreId);
     if ("error" in resolved) return resolved.error;
 
     let input = body;
-    if (resolved.role === "operator") {
+    if (!resolved.canEditAll) {
       input = Object.fromEntries(
         Object.entries(body).filter(([key]) =>
           (OPERATOR_FIELDS as readonly string[]).includes(key)
@@ -148,6 +128,8 @@ export async function PATCH(req: Request) {
       paymentMethods: enabledPaymentMethods(settings),
     });
   } catch (error) {
+    const scoped = scopeErrorResponse(error);
+    if (scoped) return scoped;
     if (error instanceof SettingsValidationError) {
       return fail(error.message, 400);
     }

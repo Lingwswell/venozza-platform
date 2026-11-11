@@ -18,6 +18,7 @@ type SettingsResponse = {
   ok?: boolean;
   error?: string;
   role?: string;
+  canEditAll?: boolean;
   store?: AdminStore;
   settings?: StoreSettingsData;
   status?: OpenStatus;
@@ -84,7 +85,7 @@ const inputClass =
 export default function ConfiguracoesPage() {
   const [stores, setStores] = useState<AdminStore[]>([]);
   const [storeId, setStoreId] = useState("");
-  const [role, setRole] = useState("");
+  const [canEditAll, setCanEditAll] = useState(true);
   const [form, setForm] = useState<FormState | null>(null);
   const [status, setStatus] = useState<OpenStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -92,7 +93,7 @@ export default function ConfiguracoesPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const isOperator = role === "operator";
+  const isOperator = !canEditAll;
 
   useEffect(() => {
     fetchWithAuth("/api/admin/stores")
@@ -115,7 +116,7 @@ export default function ConfiguracoesPage() {
         throw new Error(data.error || "Erro ao carregar configurações.");
       }
 
-      setRole(String(data.role || ""));
+      setCanEditAll(data.canEditAll !== false);
       setStoreId(data.store.id);
       setForm(toForm(data.settings));
       setStatus(data.status || null);

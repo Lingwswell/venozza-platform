@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import AdminShell from "@/components/admin/AdminShell";
 import { fetchWithAuth } from "@/lib/auth/fetch-auth";
+import { isMultiStoreRole, normalizeRole } from "@/lib/auth/roles";
 
 type RangeKey = "last7days" | "thisMonth" | "last30days";
 
@@ -97,7 +98,7 @@ export default function FinanceiroPage() {
         setStores(Array.isArray(data.stores) ? data.stores : []);
         setCurrentStoreId(data.currentStoreId || null);
 
-        if (String(data.role || "").toLowerCase() !== "owner" && data.currentStoreId) {
+        if (!isMultiStoreRole(normalizeRole(data.role)) && data.currentStoreId) {
           setSelectedStoreId(data.currentStoreId);
         }
       } catch {
@@ -123,7 +124,7 @@ export default function FinanceiroPage() {
         params.set("range", range);
 
         const effectiveStoreId =
-          String(role).toLowerCase() === "owner"
+          isMultiStoreRole(normalizeRole(role))
             ? selectedStoreId
             : currentStoreId || selectedStoreId;
 
@@ -173,7 +174,7 @@ export default function FinanceiroPage() {
     };
   }, [range, selectedStoreId, currentStoreId, role]);
 
-  const ownerMode = String(role).toLowerCase() === "owner";
+  const ownerMode = isMultiStoreRole(normalizeRole(role));
 
   const maxRevenue = useMemo(() => {
     return Math.max(...series.map((item) => item.revenue_cents), 0);

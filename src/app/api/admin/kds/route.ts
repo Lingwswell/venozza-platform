@@ -1,29 +1,21 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getAuthContextFromRequest } from "@/lib/auth/context";
+import { getAdminScope, scopeErrorResponse, storeFilter } from "@/lib/auth/scope";
 
 export async function GET(req: Request) {
   try {
-    const auth = await getAuthContextFromRequest(req);
-
-    if (!auth.tenantId) {
-      return NextResponse.json(
-        { ok: false, error: "tenantId obrigatório" },
-        { status: 400 }
-      );
-    }
+    const scope = await getAdminScope(req);
 
     const url = new URL(req.url);
     const requestedStoreId = url.searchParams.get("storeId")?.trim() || null;
 
+    // Usuario de uma loja so: sempre a loja dele. Varias lojas: a escolhida ou todas as dele.
     const effectiveStoreId =
-      auth.role === "owner"
-        ? requestedStoreId
-        : auth.storeId || null;
+      scope.storeIds.length === 1 && !scope.networkWide ? scope.storeIds[0] : requestedStoreId;
 
     const where = {
-      tenantId: auth.tenantId,
-      ...(effectiveStoreId ? { storeId: effectiveStoreId } : {}),
+      tenantId: scope.tenantId,
+      ...storeFilter(scope, effectiveStoreId),
       status: {
         in: ["novo", "preparo", "pronto", "saiu_entrega"],
       },
@@ -53,12 +45,14 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       ok: true,
-      role: auth.role,
-      currentStoreId: auth.storeId,
+      role: scope.role,
+      currentStoreId: scope.primaryStoreId,
       selectedStoreId: effectiveStoreId,
       orders,
     });
   } catch (error) {
+    const scoped = scopeErrorResponse(error);
+    if (scoped) return scoped;
     console.error("[api/admin/kds][GET]", error);
     return NextResponse.json(
       { ok: false, error: "Erro ao carregar KDS" },

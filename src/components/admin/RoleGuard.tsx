@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { normalizeRole } from "@/lib/auth/roles";
 
 type StoredUser = {
   id?: string;
@@ -44,7 +45,7 @@ export default function RoleGuard({
 
     try {
       const user = JSON.parse(rawUser) as StoredUser;
-      const role = String(user?.role || "").toLowerCase();
+      const role = normalizeRole(user?.role) || "";
 
       if (!normalizedAllow.includes(role)) {
         router.replace(redirectTo);

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getAuthContextFromRequest } from "@/lib/auth/context";
+import { getAdminScope, scopeErrorResponse } from "@/lib/auth/scope";
+import { can } from "@/lib/auth/roles";
 import {
   StoreInputError,
   parseStoreInput,
@@ -15,20 +16,11 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
   try {
     const { id } = await context.params;
 
-    let auth;
-    try {
-      auth = await getAuthContextFromRequest(req);
-    } catch {
-      return NextResponse.json({ ok: false, error: "Sessão inválida. Entre novamente." }, { status: 401 });
-    }
-
-    const role = String(auth.role || "").toLowerCase();
-    if (!auth.tenantId) {
-      return NextResponse.json({ ok: false, error: "tenantId obrigatório" }, { status: 400 });
-    }
-    if (!["owner", "admin", "super_admin"].includes(role)) {
+    const scope = await getAdminScope(req);
+    if (!can.manageStores(scope.role)) {
       return NextResponse.json({ ok: false, error: "Só o dono da rede pode editar lojas." }, { status: 403 });
     }
+    const auth = { tenantId: scope.tenantId };
 
     const current = await prisma.store.findFirst({
       where: { id, tenantId: auth.tenantId },
@@ -74,6 +66,8 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
 
     return NextResponse.json({ ok: true, store: serializeStore(store) });
   } catch (error) {
+    const scoped = scopeErrorResponse(error);
+    if (scoped) return scoped;
     if (error instanceof StoreInputError) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
     }

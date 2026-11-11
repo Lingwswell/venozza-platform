@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { ROLE_LABELS, can, normalizeRole, type Role } from "@/lib/auth/roles";
 
 type StoredUser = {
   id?: string;
@@ -11,17 +12,21 @@ type StoredUser = {
   role?: string;
 };
 
-const menu = [
-  { href: "/admin/dashboard", label: "Dashboard", icon: "📊" },
-  { href: "/admin/pedidos", label: "Pedidos", icon: "🧾" },
-  { href: "/admin/kds", label: "KDS", icon: "🍳" },
-  { href: "/admin/produtos", label: "Produtos", icon: "🍕" },
-  { href: "/admin/opcoes", label: "Opções", icon: "🧩" },
-  { href: "/admin/lojas", label: "Lojas", icon: "🏬" },
-  { href: "/admin/financeiro", label: "Financeiro", icon: "💰" },
-  { href: "/admin/clientes", label: "Clientes", icon: "👥" },
-  { href: "/admin/marketing", label: "Marketing", icon: "📣" },
-  { href: "/admin/configuracoes", label: "Configurações", icon: "⚙️" },
+// Cada item aparece so para quem tem permissao (o servidor tambem confere).
+const menu: { href: string; label: string; icon: string; show: (role: Role | null) => boolean }[] = [
+  { href: "/admin/dashboard", label: "Dashboard", icon: "📊", show: can.operateStoreKds },
+  { href: "/admin/monitor", label: "Monitor", icon: "🛰️", show: can.viewMonitor },
+  { href: "/admin/pedidos", label: "Pedidos", icon: "🧾", show: can.operateStoreKds },
+  { href: "/admin/kds", label: "KDS", icon: "🍳", show: can.operateStoreKds },
+  { href: "/admin/produtos", label: "Produtos", icon: "🍕", show: can.operateStoreKds },
+  { href: "/admin/categorias", label: "Categorias", icon: "🗂️", show: can.manageCatalog },
+  { href: "/admin/opcoes", label: "Opções", icon: "🧩", show: can.manageCatalog },
+  { href: "/admin/lojas", label: "Lojas", icon: "🏬", show: can.manageStores },
+  { href: "/admin/usuarios", label: "Usuários", icon: "👤", show: can.manageUsers },
+  { href: "/admin/financeiro", label: "Financeiro", icon: "💰", show: can.viewReports },
+  { href: "/admin/marketing", label: "Marketing", icon: "📣", show: can.manageCatalog },
+  { href: "/admin/clientes", label: "Redes", icon: "🌐", show: (r) => r === "super_admin" },
+  { href: "/admin/configuracoes", label: "Configurações", icon: "⚙️", show: can.openCloseStore },
 ];
 
 export default function AdminShell({
@@ -66,6 +71,8 @@ export default function AdminShell({
       router.replace("/admin/login");
     }
   }, [router]);
+
+  const role = normalizeRole(user?.role);
 
   const initials = useMemo(() => {
     const name = user?.name?.trim() || "Admin";
@@ -124,7 +131,7 @@ export default function AdminShell({
           </div>
 
           <nav className="flex-1 space-y-1 px-3 py-3">
-            {menu.map((item) => {
+            {menu.filter((item) => item.show(role)).map((item) => {
               const active = pathname === item.href;
               return (
                 <Link
@@ -192,7 +199,7 @@ export default function AdminShell({
                       {user?.name || "Admin"}
                     </p>
                     <p className="truncate text-[11px] text-slate-500">
-                      {user?.email || "admin@venozza.com"} • {user?.role || "SUPER_ADMIN"}
+                      {user?.email || ""} • {role ? ROLE_LABELS[role] : "—"}
                     </p>
                   </div>
                 </div>

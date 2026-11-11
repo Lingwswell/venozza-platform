@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchWithAuth } from "@/lib/auth/fetch-auth";
+import { isMultiStoreRole, normalizeRole } from "@/lib/auth/roles";
 
 type KDSStatus =
   | "novo"
@@ -203,7 +204,7 @@ export default function KDSBoard({ mode = "admin" }: { mode?: "admin" | "store" 
     setRole(data.role || "");
     setCurrentStoreId(data.currentStoreId || null);
 
-    if (data.role !== "owner" && data.currentStoreId) {
+    if (!isMultiStoreRole(normalizeRole(data.role)) && data.currentStoreId) {
       setSelectedStoreId(data.currentStoreId);
     }
   }, []);
@@ -211,7 +212,7 @@ export default function KDSBoard({ mode = "admin" }: { mode?: "admin" | "store" 
   const loadOrders = useCallback(async () => {
     try {
       const query =
-        role === "owner" && selectedStoreId
+        isMultiStoreRole(normalizeRole(role)) && selectedStoreId
           ? `?storeId=${encodeURIComponent(selectedStoreId) }`
           : "";
 
@@ -421,7 +422,7 @@ export default function KDSBoard({ mode = "admin" }: { mode?: "admin" | "store" 
         <div className="rounded-2xl border border-white/10 bg-neutral-900 p-4">
           <div className="text-xs uppercase tracking-wide text-neutral-400">Escopo</div>
           <div className="mt-2 text-sm font-semibold text-white">
-            {role === "owner"
+            {isMultiStoreRole(normalizeRole(role))
               ? selectedStoreId
                 ? "Loja filtrada"
                 : "Todas as lojas"
@@ -436,7 +437,7 @@ export default function KDSBoard({ mode = "admin" }: { mode?: "admin" | "store" 
             {loading ? "Carregando painel..." : "Painel multi-loja ativo e monitorando pedidos."}
           </div>
 
-          {mode === "admin" && role === "owner" ? (
+          {mode === "admin" && isMultiStoreRole(normalizeRole(role)) ? (
             <div className="flex items-center gap-2">
               <label className="text-sm text-neutral-400">Loja</label>
               <select

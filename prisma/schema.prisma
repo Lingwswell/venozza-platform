@@ -22,6 +22,7 @@ model Tenant {
   optionGroups OptionGroup[]
   optionItems  OptionItem[]
   domains      TenantDomain[]
+  products     Product[]
 
   @@map("tenants")
 }
@@ -67,6 +68,7 @@ model Store {
   productStores             ProductStore[]
   storeOptionAvailabilities StoreOptionAvailability[]
   settings                  StoreSettings?
+  userStores                UserStore[]
 
   @@unique([tenantId, slug])
   @@index([tenantId])
@@ -86,11 +88,29 @@ model User {
   updatedAt DateTime @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Loja principal (usada como padrao). As lojas que o usuario acessa ficam em stores.
   store  Store? @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  stores UserStore[]
 
   @@index([tenantId])
   @@index([storeId])
   @@map("users")
+}
+
+// Lojas que um usuario pode acessar (franqueado com varias lojas, gerente, operador).
+// Dono da rede e super_admin acessam todas as lojas da rede e nao precisam de linhas aqui.
+model UserStore {
+  id        String   @id @default(cuid())
+  userId    String
+  storeId   String
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, storeId])
+  @@index([storeId])
+  @@map("user_stores")
 }
 
 model Category {
@@ -118,6 +138,7 @@ model Category {
 
 model Product {
   id                  String               @id @default(cuid())
+  tenantId            String?
   name                String
   price_cents         Int
   storeId             String
@@ -129,6 +150,9 @@ model Product {
   image               String?
   productStores       ProductStore[]
   productOptionGroups ProductOptionGroup[]
+  tenant              Tenant?              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
 }
 
 // Regras operacionais da loja. Tudo que o app/site/checkout precisa saber

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { getAuthContextFromRequest } from "@/lib/auth/context";
+import { normalizeRole as normalizeKnownRole } from "@/lib/auth/roles";
 
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 
@@ -23,10 +24,7 @@ function sanitizeBaseName(value: string) {
 }
 
 function normalizeRole(role: string | null | undefined) {
-  if (role === "super_admin") return "super_admin";
-  if (role === "owner") return "owner";
-  if (role === "operator") return "operator";
-  return "customer";
+  return normalizeKnownRole(role) ?? "customer";
 }
 
 export async function POST(req: Request) {

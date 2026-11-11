@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getAuthContextFromRequest } from "@/lib/auth/context";
+import { getAdminScope, scopeErrorResponse, storeFilter } from "@/lib/auth/scope";
 import { OrderService } from "@/lib/services/order.service";
 import { AppError } from "@/lib/api/errors";
 import { resolveTenantFromRequest } from "@/lib/tenant/resolve";
@@ -50,40 +51,23 @@ function getStatusFilter(scope: string | null) {
 
 export async function GET(req: Request) {
   try {
-    const auth = await getAuthContextFromRequest(req);
-
-    if (!auth.tenantId) {
-      return NextResponse.json(
-        { ok: false, error: "tenantId é obrigatório" },
-        { status: 400 }
-      );
-    }
+    const scope = await getAdminScope(req);
+    const auth = { tenantId: scope.tenantId };
 
     const url = new URL(req.url);
-    const requestStoreId = req.headers.get("x-store-id")?.trim() || null;
+    const requestStoreId = url.searchParams.get("storeId")?.trim() || null;
     const requestedScope = url.searchParams.get("scope");
     const statusFilter = getStatusFilter(requestedScope);
 
+    // Lojas que o usuario acessa (ou a loja pedida, se estiver no escopo).
     const where: {
       tenantId: string;
-      storeId?: string;
+      storeId?: string | { in: string[] };
       status?: { in: string[] };
     } = {
       tenantId: auth.tenantId,
+      ...storeFilter(scope, requestStoreId),
     };
-
-    if (String(auth.role || "").toLowerCase() !== "owner") {
-      const effectiveStoreId = auth.storeId || requestStoreId;
-
-      if (!effectiveStoreId) {
-        return NextResponse.json(
-          { ok: false, error: "storeId é obrigatório para este usuário" },
-          { status: 400 }
-        );
-      }
-
-      where.storeId = effectiveStoreId;
-    }
 
     if (statusFilter) {
       where.status = { in: statusFilter };
@@ -146,6 +130,8 @@ export async function GET(req: Request) {
       })),
     });
   } catch (error) {
+    const scoped = scopeErrorResponse(error);
+    if (scoped) return scoped;
     console.error("[api/orders][GET]", error);
 
     const message =

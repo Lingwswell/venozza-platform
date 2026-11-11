@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getAuthContextFromRequest } from "@/lib/auth/context";
+import { getAdminScope, scopeErrorResponse } from "@/lib/auth/scope";
+import { can, isMultiStoreRole } from "@/lib/auth/roles";
 import {
   StoreInputError,
   parseStoreInput,
@@ -9,81 +10,34 @@ import {
   storeAdminSelect,
 } from "@/lib/store/store-input";
 
-type AdminRole = "super_admin" | "owner" | "operator" | "customer";
-
-type AuthContext = {
-  tenantId?: string | null;
-  storeId?: string | null;
-  role?: string | null;
-};
-
-function normalizeRole(role: string | null | undefined): AdminRole {
-  if (role === "super_admin") return "super_admin";
-  if (role === "owner" || role === "admin") return "owner";
-  if (role === "operator") return "operator";
-  return "customer";
-}
-
 export async function GET(req: Request) {
   try {
-    let auth: AuthContext;
+    const scope = await getAdminScope(req);
 
-    try {
-      auth = await getAuthContextFromRequest(req);
-    } catch {
-      return NextResponse.json(
-        { ok: false, error: "Sessão inválida. Entre novamente." },
-        { status: 401 }
-      );
-    }
-
-    const tenantId = auth.tenantId;
-    const storeId = auth.storeId;
-    const role = normalizeRole(auth.role);
-
-    if (!tenantId) {
-      return NextResponse.json({ ok: false, error: "tenantId obrigatório" }, { status: 400 });
-    }
-
-    if (role === "customer") {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Acesso administrativo obrigatório",
-          role,
-          currentStoreId: storeId,
-          tenantId,
-          stores: [],
-        },
-        { status: 403 }
-      );
-    }
-
-    // ?all=1 (tela Lojas): gestor tambem ve lojas desativadas para poder reativar.
-    const includeInactive =
-      new URL(req.url).searchParams.get("all") === "1" && role !== "operator";
-
-    const where =
-      role === "operator"
-        ? { tenantId, id: storeId || "", active: true }
-        : includeInactive
-          ? { tenantId }
-          : { tenantId, active: true };
+    // ?all=1 (tela Lojas): dono da rede tambem ve lojas desativadas para poder reativar.
+    const includeInactive = new URL(req.url).searchParams.get("all") === "1" && scope.networkWide;
 
     const stores = await prisma.store.findMany({
-      where,
+      where: {
+        tenantId: scope.tenantId,
+        ...(scope.networkWide ? {} : { id: { in: scope.storeIds } }),
+        ...(includeInactive ? {} : { active: true }),
+      },
       orderBy: { name: "asc" },
       select: storeAdminSelect,
     });
 
     return NextResponse.json({
       ok: true,
-      role,
-      currentStoreId: storeId,
-      tenantId,
+      role: scope.role,
+      multiStore: isMultiStoreRole(scope.role) && stores.length > 1,
+      currentStoreId: scope.primaryStoreId,
+      tenantId: scope.tenantId,
       stores: stores.map(serializeStore),
     });
   } catch (error) {
+    const scoped = scopeErrorResponse(error);
+    if (scoped) return scoped;
     console.error("[api/admin/stores][GET]", error);
     return NextResponse.json({ ok: false, error: "Erro ao listar lojas" }, { status: 500 });
   }
@@ -92,20 +46,10 @@ export async function GET(req: Request) {
 // Criar loja (dono da rede ou super_admin). Opcional: copyFromStoreId copia o cardapio.
 export async function POST(req: Request) {
   try {
-    let auth: AuthContext;
-    try {
-      auth = await getAuthContextFromRequest(req);
-    } catch {
-      return NextResponse.json({ ok: false, error: "Sessão inválida. Entre novamente." }, { status: 401 });
-    }
+    const scope = await getAdminScope(req);
+    const tenantId = scope.tenantId;
 
-    const role = normalizeRole(auth.role);
-    const tenantId = auth.tenantId;
-
-    if (!tenantId) {
-      return NextResponse.json({ ok: false, error: "tenantId obrigatório" }, { status: 400 });
-    }
-    if (role !== "owner" && role !== "super_admin") {
+    if (!can.manageStores(scope.role)) {
       return NextResponse.json({ ok: false, error: "Só o dono da rede pode criar lojas." }, { status: 403 });
     }
 
@@ -159,6 +103,8 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true, store: serializeStore(store) }, { status: 201 });
   } catch (error) {
+    const scoped = scopeErrorResponse(error);
+    if (scoped) return scoped;
     if (error instanceof StoreInputError) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
     }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import AdminShell from "@/components/admin/AdminShell";
 import { fetchWithAuth } from "@/lib/auth/fetch-auth";
+import { isMultiStoreRole, normalizeRole } from "@/lib/auth/roles";
 
 type RangeKey =
   | "today"
@@ -138,7 +139,7 @@ export default function AdminDashboardPage() {
         setStores(Array.isArray(data.stores) ? data.stores : []);
         setCurrentStoreId(data.currentStoreId || null);
 
-        if (String(data.role || "").toLowerCase() !== "owner" && data.currentStoreId) {
+        if (!isMultiStoreRole(normalizeRole(data.role)) && data.currentStoreId) {
           setSelectedStoreId(data.currentStoreId);
         }
       } catch {
@@ -169,7 +170,7 @@ export default function AdminDashboardPage() {
         }
 
         const effectiveStoreId =
-          String(role).toLowerCase() === "owner"
+          isMultiStoreRole(normalizeRole(role))
             ? selectedStoreId
             : currentStoreId || selectedStoreId;
 
@@ -252,7 +253,7 @@ export default function AdminDashboardPage() {
     setAppliedCustomEnd(customEnd);
   }
 
-  const ownerMode = String(role).toLowerCase() === "owner";
+  const ownerMode = isMultiStoreRole(normalizeRole(role));
 
   return (
     <AdminShell

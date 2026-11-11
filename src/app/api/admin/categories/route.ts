@@ -1,21 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getAuthContextFromRequest } from "@/lib/auth/context";
-
-type AdminRole = "super_admin" | "owner" | "operator" | "customer";
-
-type AuthContext = {
-  tenantId?: string | null;
-  storeId?: string | null;
-  role?: string | null;
-};
-
-function normalizeRole(role: string | null | undefined): AdminRole {
-  if (role === "super_admin") return "super_admin";
-  if (role === "owner") return "owner";
-  if (role === "operator") return "operator";
-  return "customer";
-}
+import { getLegacyAdminContext } from "@/lib/auth/admin-context";
+import { scopeErrorResponse } from "@/lib/auth/scope";
 
 function slugify(value: string) {
   return value
@@ -28,32 +14,8 @@ function slugify(value: string) {
 }
 
 async function getAdminContext(req: Request) {
-  let auth: AuthContext = {};
-
-  try {
-    auth = await getAuthContextFromRequest(req);
-  } catch (error) {
-    console.warn("[api/admin/categories][auth fallback]", error);
-    auth = {};
-  }
-
-  const headerTenantId = req.headers.get("x-tenant-id");
-  const headerRole = normalizeRole(req.headers.get("x-user-role"));
-  const authRole = normalizeRole(auth.role);
-
-  const tenantId = auth.tenantId || headerTenantId;
-
-  const role =
-    authRole !== "customer"
-      ? authRole
-      : headerRole !== "customer"
-        ? headerRole
-        : authRole;
-
-  return {
-    tenantId,
-    role,
-  };
+  // Permissao vem so do token validado + banco (nunca de cabecalhos do navegador).
+  return getLegacyAdminContext(req);
 }
 
 export async function GET(req: Request) {
@@ -101,6 +63,8 @@ export async function GET(req: Request) {
       categories,
     });
   } catch (error) {
+    const scoped = scopeErrorResponse(error);
+    if (scoped) return scoped;
     console.error("[api/admin/categories][GET]", error);
 
     return NextResponse.json(
@@ -202,6 +166,8 @@ export async function POST(req: Request) {
       { status: 201 }
     );
   } catch (error) {
+    const scoped = scopeErrorResponse(error);
+    if (scoped) return scoped;
     console.error("[api/admin/categories][POST]", error);
 
     return NextResponse.json(

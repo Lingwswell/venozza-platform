@@ -67,12 +67,14 @@ async function main() {
           where: { id: existing.id },
           data: {
             ...item,
+            tenantId: store.tenantId,
             storeId: store.id,
           },
         })
       : await prisma.product.create({
           data: {
             ...item,
+            tenantId: store.tenantId,
             storeId: store.id,
           },
         });

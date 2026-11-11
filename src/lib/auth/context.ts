@@ -23,8 +23,6 @@ export async function getAuthContextFromRequest(
   options: { allowPublic?: boolean } = {}
 ): Promise<AuthContext> {
   const authHeader = req.headers.get("authorization");
-  const roleHeader = req.headers.get("x-user-role");
-  const tenantHeader = req.headers.get("x-tenant-id");
   const storeHeader = req.headers.get("x-store-id");
 
   if (authHeader?.startsWith("Bearer ")) {
@@ -57,11 +55,16 @@ export async function getAuthContextFromRequest(
         tenantId: true,
         storeId: true,
         active: true,
+        tenant: { select: { active: true } },
       },
     });
 
     if (!user || !user.active) {
       throw new Error("Usuário inválido ou inativo.");
+    }
+
+    if (!user.tenant?.active) {
+      throw new Error("Usuário inválido ou inativo: rede suspensa.");
     }
 
     return {

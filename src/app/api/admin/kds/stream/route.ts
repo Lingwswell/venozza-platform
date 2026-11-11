@@ -1,4 +1,4 @@
-import { getAuthContextFromRequest } from "@/lib/auth/context";
+import { ScopeError, getAdminScope, type AdminScope } from "@/lib/auth/scope";
 import {
   getKdsRealtimeAdapter,
   getStoreChannel,
@@ -20,11 +20,14 @@ export async function GET(req: Request) {
         })
       : req;
 
-    const auth = await getAuthContextFromRequest(authRequest);
-
-    if (!auth.tenantId) {
-      return new Response("tenantId obrigatório", { status: 400 });
+    let scope: AdminScope;
+    try {
+      scope = await getAdminScope(authRequest);
+    } catch (error) {
+      if (error instanceof ScopeError) return new Response(error.message, { status: error.status });
+      throw error;
     }
+    const tenantId = scope.tenantId;
 
     const adapter = getKdsRealtimeAdapter();
 
@@ -40,18 +43,12 @@ export async function GET(req: Request) {
 
         sendJson({ type: "connected", ts: Date.now() });
 
-        const tenantUnsub = adapter.subscribe(
-          getTenantChannel(auth.tenantId!),
-          sendJson
-        );
-
-        const storeUnsub =
-          auth.storeId
-            ? adapter.subscribe(
-                getStoreChannel(auth.tenantId!, auth.storeId),
-                sendJson
-              )
-            : () => {};
+        // Rede toda: canal da rede. Usuario de loja: so os canais das lojas dele.
+        const unsubs = scope.networkWide
+          ? [adapter.subscribe(getTenantChannel(tenantId), sendJson)]
+          : scope.storeIds.map((storeId) =>
+              adapter.subscribe(getStoreChannel(tenantId, storeId), sendJson)
+            );
 
         const heartbeat = setInterval(() => {
           sendJson({ type: "heartbeat", ts: Date.now() });
@@ -59,8 +56,7 @@ export async function GET(req: Request) {
 
         req.signal.addEventListener("abort", () => {
           clearInterval(heartbeat);
-          tenantUnsub();
-          storeUnsub();
+          for (const unsub of unsubs) unsub();
           try {
             controller.close();
           } catch {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { prisma } from "@/lib/db";
+import { normalizeRole } from "@/lib/auth/roles";
 import { clientKey, rateLimit } from "@/lib/rate-limit";
 
 export async function POST(req: Request) {
@@ -29,6 +30,7 @@ export async function POST(req: Request) {
 
     const user = await prisma.user.findUnique({
       where: { email },
+      include: { tenant: { select: { active: true } } },
     });
 
     if (!user) {
@@ -39,8 +41,10 @@ export async function POST(req: Request) {
     }
 
     const valid = await bcrypt.compare(password, user.password);
+    const role = normalizeRole(user.role);
 
-    if (!valid) {
+    // Mesma mensagem para nao revelar se a conta existe/esta ativa.
+    if (!valid || !user.active || !user.tenant?.active || !role) {
       return NextResponse.json(
         { error: "E-mail ou senha inválidos" },
         { status: 401 }
@@ -54,7 +58,7 @@ export async function POST(req: Request) {
       {
         userId: user.id,
         email: user.email,
-        role: user.role,
+        role,
         tenantId: user.tenantId,
         storeId: user.storeId,
       },
@@ -69,7 +73,7 @@ export async function POST(req: Request) {
         id: user.id,
         name: user.name,
         email: user.email,
-        role: user.role,
+        role,
         tenantId: user.tenantId,
         storeId: user.storeId,
       },

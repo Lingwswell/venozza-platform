@@ -1,53 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getAuthContextFromRequest } from "@/lib/auth/context";
-
-type AdminRole = "super_admin" | "owner" | "operator" | "customer";
-
-type AuthContext = {
-  tenantId?: string | null;
-  storeId?: string | null;
-  role?: string | null;
-};
-
-function normalizeRole(role: string | null | undefined): AdminRole {
-  if (role === "super_admin") return "super_admin";
-  if (role === "owner") return "owner";
-  if (role === "operator") return "operator";
-  return "customer";
-}
+import { getLegacyAdminContext } from "@/lib/auth/admin-context";
+import { scopeErrorResponse } from "@/lib/auth/scope";
 
 async function getAdminContext(req: Request) {
-  let auth: AuthContext = {};
-
-  try {
-    auth = await getAuthContextFromRequest(req);
-  } catch (error) {
-    console.warn("[api/admin/products][auth fallback]", error);
-    auth = {};
-  }
-
-  const headerTenantId = req.headers.get("x-tenant-id");
-  const headerStoreId = req.headers.get("x-store-id");
-  const headerRole = normalizeRole(req.headers.get("x-user-role"));
-
-  const authRole = normalizeRole(auth.role);
-
-  const tenantId = auth.tenantId || headerTenantId;
-  const currentStoreId = auth.storeId || headerStoreId;
-
-  const role =
-    authRole !== "customer"
-      ? authRole
-      : headerRole !== "customer"
-        ? headerRole
-        : authRole;
-
-  return {
-    tenantId,
-    currentStoreId,
-    role,
-  };
+  // Permissao vem so do token validado + banco (nunca de cabecalhos do navegador).
+  return getLegacyAdminContext(req);
 }
 
 function normalizePriceCents(value: unknown) {
@@ -77,7 +35,7 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const queryStoreId = url.searchParams.get("storeId");
 
-    const { tenantId, currentStoreId, role } = await getAdminContext(req);
+    const { tenantId, currentStoreId, role, scope } = await getAdminContext(req);
 
     if (!tenantId) {
       return NextResponse.json(
@@ -99,10 +57,12 @@ export async function GET(req: Request) {
       );
     }
 
+    // Usuario de loja so ve as lojas dele.
     const stores = await prisma.store.findMany({
       where: {
         tenantId,
         active: true,
+        ...(scope.networkWide ? {} : { id: { in: scope.storeIds } }),
       },
       select: {
         id: true,
@@ -120,7 +80,9 @@ export async function GET(req: Request) {
 
     const effectiveStoreId =
       role === "operator"
-        ? currentStoreId
+        ? queryStoreId && allowedStoreIds.includes(queryStoreId)
+          ? queryStoreId
+          : currentStoreId
         : queryStoreId && queryStoreId !== "all"
           ? queryStoreId
           : null;
@@ -173,7 +135,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       ok: true,
-      role,
+      role: scope.role,
       tenantId,
       currentStoreId,
       selectedStoreId: effectiveStoreId || "all",
@@ -207,6 +169,8 @@ export async function GET(req: Request) {
       }),
     });
   } catch (error) {
+    const scoped = scopeErrorResponse(error);
+    if (scoped) return scoped;
     console.error("[api/admin/products][GET]", error);
 
     return NextResponse.json(
@@ -222,6 +186,14 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const { tenantId, currentStoreId, role } = await getAdminContext(req);
+
+    // Cadastro do cardapio e da rede: so dono da rede / super_admin.
+    if (role === "operator") {
+      return NextResponse.json(
+        { ok: false, error: "Só o dono da rede cadastra produtos. A loja controla preço, estoque e disponibilidade." },
+        { status: 403 }
+      );
+    }
 
     if (!tenantId) {
       return NextResponse.json(
@@ -334,6 +306,7 @@ export async function POST(req: Request) {
         stores.map((store) =>
           prisma.product.create({
             data: {
+              tenantId,
               name,
               category,
               customizationType,
@@ -407,6 +380,7 @@ export async function POST(req: Request) {
 
     const product = await prisma.product.create({
       data: {
+        tenantId,
         name,
         category,
         customizationType,
@@ -452,6 +426,8 @@ export async function POST(req: Request) {
       { status: 201 }
     );
   } catch (error) {
+    const scoped = scopeErrorResponse(error);
+    if (scoped) return scoped;
     console.error("[api/admin/products][POST]", error);
 
     return NextResponse.json(

@@ -5,7 +5,7 @@ import KDSBoard from "@/components/admin/KDSBoard";
 
 export default function StoreKDSPage() {
   return (
-    <RoleGuard allow={["operator", "owner", "super_admin"]} redirectTo="/admin/dashboard">
+    <RoleGuard allow={["super_admin", "owner", "franchisee", "manager", "operator"]} redirectTo="/admin/dashboard">
       <main className="min-h-screen bg-neutral-950 text-white">
         <div className="mx-auto max-w-[1800px] p-4 md:p-6">
           <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">

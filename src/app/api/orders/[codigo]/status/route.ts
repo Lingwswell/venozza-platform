@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getAuthContextFromRequest } from "@/lib/auth/context";
+import { getAdminScope, scopeErrorResponse, storeFilter } from "@/lib/auth/scope";
+import { can } from "@/lib/auth/roles";
 import {
   getKdsRealtimeAdapter,
   getStoreChannel,
@@ -21,13 +22,11 @@ export async function PATCH(
   context: { params: Promise<{ codigo: string }> }
 ) {
   try {
-    const auth = await getAuthContextFromRequest(req);
+    const scope = await getAdminScope(req);
+    const auth = { tenantId: scope.tenantId };
 
-    if (!auth.tenantId) {
-      return NextResponse.json(
-        { ok: false, error: "tenantId obrigatório" },
-        { status: 400 }
-      );
+    if (!can.operateStoreKds(scope.role)) {
+      return NextResponse.json({ ok: false, error: "Sem permissão" }, { status: 403 });
     }
 
     const { codigo } = await context.params;
@@ -45,9 +44,7 @@ export async function PATCH(
       where: {
         orderCode: codigo,
         tenantId: auth.tenantId,
-        ...(auth.role === "owner"
-          ? {}
-          : { storeId: auth.storeId || "__NO_STORE__" }),
+        ...storeFilter(scope),
       },
       include: {
         store: {
@@ -114,6 +111,8 @@ export async function PATCH(
       order: updated,
     });
   } catch (error) {
+    const scoped = scopeErrorResponse(error);
+    if (scoped) return scoped;
     console.error("[api/orders/:codigo/status][PATCH]", error);
     return NextResponse.json(
       { ok: false, error: "Erro ao atualizar status" },

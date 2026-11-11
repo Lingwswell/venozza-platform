@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getAuthContextFromRequest } from "@/lib/auth/context";
+import { getAdminScope, scopeErrorResponse, storeFilter } from "@/lib/auth/scope";
 
 function startOfToday() {
   const now = new Date();
@@ -9,33 +9,24 @@ function startOfToday() {
 
 export async function GET(req: Request) {
   try {
-    const auth = await getAuthContextFromRequest(req);
-
-    if (!auth.tenantId) {
-      return NextResponse.json(
-        { ok: false, error: "tenantId obrigatório" },
-        { status: 400 }
-      );
-    }
+    const scope = await getAdminScope(req);
+    const requestedStoreId = new URL(req.url).searchParams.get("storeId");
+    const filter = storeFilter(scope, requestedStoreId);
 
     const todayStart = startOfToday();
 
     const orderWhere = {
-      tenantId: auth.tenantId,
-      ...(String(auth.role).toLowerCase() === "owner"
-        ? {}
-        : { storeId: auth.storeId || "__NO_STORE__" }),
+      tenantId: scope.tenantId,
+      ...filter,
       createdAt: {
         gte: todayStart,
       },
     };
 
     const storeWhere = {
-      tenantId: auth.tenantId,
+      tenantId: scope.tenantId,
       active: true,
-      ...(String(auth.role).toLowerCase() === "owner"
-        ? {}
-        : { id: auth.storeId || "__NO_STORE__" }),
+      ...(filter.storeId ? { id: filter.storeId } : {}),
     };
 
     const [ordersToday, revenueAgg, activeStores] = await Promise.all([
@@ -67,6 +58,8 @@ export async function GET(req: Request) {
       },
     });
   } catch (error) {
+    const scoped = scopeErrorResponse(error);
+    if (scoped) return scoped;
     console.error("[api/admin/dashboard][GET]", error);
 
     return NextResponse.json(
