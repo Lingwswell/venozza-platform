@@ -119,9 +119,9 @@ function ProductForm({
               {product.name}
             </h2>
             {product.description ? (
-              <p className="mt-1 text-sm leading-relaxed text-[#6B625B]">{product.description}</p>
+              <p className="mt-1 text-sm leading-relaxed text-[#57534E]">{product.description}</p>
             ) : null}
-            <p className="mt-2 font-semibold text-[#C8171E]">
+            <p className="mt-2 font-semibold text-[#B91C1C]">
               {kind === "pizza" ? `a partir de ${money(product.price_cents + (defaultOption(catalog.pizzaSizes).price_cents || 0))}` : money(product.price_cents)}
             </p>
           </div>
@@ -129,13 +129,13 @@ function ProductForm({
 
         <div className="mt-6 space-y-5">
           {loading && (kind === "pizza" || kind === "batata") ? (
-            <p className="text-sm text-[#857A71]">Carregando opções...</p>
+            <p className="text-sm text-[#8A8580]">Carregando opções...</p>
           ) : error ? (
-            <p className="rounded-2xl bg-[#FDEDEC] px-4 py-3 text-sm text-[#A3141A]">{error}</p>
+            <p className="rounded-2xl bg-[#FDEDEC] px-4 py-3 text-sm text-[#991B1B]">{error}</p>
           ) : null}
 
           {missingSize ? (
-            <p className="rounded-2xl bg-[#FDEDEC] px-4 py-3 text-sm text-[#A3141A]">
+            <p className="rounded-2xl bg-[#FDEDEC] px-4 py-3 text-sm text-[#991B1B]">
               Esta loja ainda não cadastrou tamanhos de pizza. Escolha outra loja ou fale com a loja.
             </p>
           ) : null}
@@ -160,14 +160,14 @@ function ProductForm({
             </>
           ) : null}
 
-          <label className="block border-t border-[#ECE6DF] pt-5">
-            <span className="text-base font-semibold text-[#1F1A17]">Alguma observação?</span>
+          <label className="block border-t border-[#E7E5E4] pt-5">
+            <span className="text-base font-semibold text-[#1C1917]">Alguma observação?</span>
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value.slice(0, 200))}
               rows={2}
               placeholder="Ex.: sem cebola, bem assada"
-              className="mt-2 w-full rounded-2xl border border-[#ECE6DF] px-4 py-3 text-sm outline-none focus:border-[#C8171E]"
+              className="mt-2 w-full rounded-2xl border border-[#E7E5E4] px-4 py-3 text-sm outline-none focus:border-[#B91C1C]"
             />
           </label>
         </div>

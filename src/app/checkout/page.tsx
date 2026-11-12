@@ -108,17 +108,17 @@ export default function SiteCheckoutPage() {
   }
 
   const input =
-    "w-full rounded-2xl border border-[#ECE6DF] bg-white px-4 py-3 text-[15px] outline-none focus:border-[#C8171E]";
+    "w-full rounded-2xl border border-[#E7E5E4] bg-white px-4 py-3 text-[15px] outline-none focus:border-[#B91C1C]";
 
   return (
-    <main className="min-h-screen bg-[#FCFBF9] text-[#1F1A17]">
-      <header className="border-b border-[#ECE6DF]">
+    <main className="min-h-screen bg-[#F6F5F2] font-sans text-[#1C1917]">
+      <header className="border-b border-[#E7E5E4]">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-4">
-          <Link href="/" className={`${focusRing} inline-flex items-center gap-2 rounded text-sm font-semibold text-[#4A423C] hover:text-[#C8171E]`}>
+          <Link href="/" className={`${focusRing} inline-flex items-center gap-2 rounded text-sm font-semibold text-[#4A423C] hover:text-[#B91C1C]`}>
             <ArrowLeft className="h-4 w-4" />
             Voltar ao cardápio
           </Link>
-          <span className={`${displayFont.className} text-xl font-extrabold text-[#C8171E]`}>
+          <span className={`${displayFont.className} text-xl font-extrabold text-[#B91C1C]`}>
             {catalog?.store.brandName || ""}
           </span>
         </div>
@@ -128,15 +128,15 @@ export default function SiteCheckoutPage() {
         <section>
           <h1 className={`${displayFont.className} text-4xl font-extrabold tracking-[-0.03em]`}>Finalizar pedido</h1>
           {catalog ? (
-            <p className="mt-2 text-[#6B625B]">
+            <p className="mt-2 text-[#57534E]">
               Entrega pela {catalog.store.name}. Pagamento na entrega.
             </p>
           ) : null}
 
           {ready && items.length === 0 ? (
-            <div className="mt-8 rounded-[28px] border border-[#ECE6DF] bg-white p-8 text-center">
-              <p className="text-[#6B625B]">Seu carrinho está vazio.</p>
-              <Link href="/" className={`${focusRing} mt-4 inline-block rounded-full bg-[#C8171E] px-6 py-3 text-sm font-bold text-white`}>
+            <div className="mt-8 rounded-[28px] border border-[#E7E5E4] bg-white p-8 text-center">
+              <p className="text-[#57534E]">Seu carrinho está vazio.</p>
+              <Link href="/" className={`${focusRing} mt-4 inline-block rounded-full bg-[#B91C1C] px-6 py-3 text-sm font-bold text-white`}>
                 Ver o cardápio
               </Link>
             </div>
@@ -157,7 +157,7 @@ export default function SiteCheckoutPage() {
                 <textarea value={form.address} onChange={(e) => update("address", e.target.value)} autoComplete="street-address" rows={3} placeholder="Rua, número, complemento, bairro" className={input} />
               </label>
               <label className="block">
-                <span className="mb-1.5 block text-sm font-semibold">Observações para a loja <span className="font-normal text-[#857A71]">(opcional)</span></span>
+                <span className="mb-1.5 block text-sm font-semibold">Observações para a loja <span className="font-normal text-[#8A8580]">(opcional)</span></span>
                 <input value={form.notes} onChange={(e) => update("notes", e.target.value)} placeholder="Ex.: interfone quebrado, troco para R$ 100" className={input} />
               </label>
 
@@ -169,8 +169,8 @@ export default function SiteCheckoutPage() {
                       <label
                         key={m.key}
                         className={[
-                          "cursor-pointer rounded-full border px-4 py-2.5 text-sm font-medium focus-within:outline focus-within:outline-2 focus-within:outline-[#C8171E]",
-                          payment === m.key ? "border-[#C8171E] bg-[#FDF2F1] text-[#A3141A]" : "border-[#ECE6DF] bg-white",
+                          "cursor-pointer rounded-full border px-4 py-2.5 text-sm font-medium focus-within:outline focus-within:outline-2 focus-within:outline-[#B91C1C]",
+                          payment === m.key ? "border-[#B91C1C] bg-[#FDF2F1] text-[#991B1B]" : "border-[#E7E5E4] bg-white",
                         ].join(" ")}
                       >
                         <input type="radio" name="pagamento" className="sr-only" checked={payment === m.key} onChange={() => update("payment", m.key)} />
@@ -182,18 +182,18 @@ export default function SiteCheckoutPage() {
               ) : null}
 
               {closed ? (
-                <p className="rounded-2xl bg-[#FDEDEC] px-4 py-3 text-sm font-medium text-[#A3141A]">{catalog?.status.message}</p>
+                <p className="rounded-2xl bg-[#FDEDEC] px-4 py-3 text-sm font-medium text-[#991B1B]">{catalog?.status.message}</p>
               ) : missing > 0 ? (
                 <p className="rounded-2xl bg-[#FFF6E0] px-4 py-3 text-sm text-[#7A5600]">
                   Faltam {money(missing)} para o pedido mínimo de {money(minimum)}.
                 </p>
               ) : null}
-              {message ? <p className="rounded-2xl bg-[#FDEDEC] px-4 py-3 text-sm font-medium text-[#A3141A]">{message}</p> : null}
+              {message ? <p className="rounded-2xl bg-[#FDEDEC] px-4 py-3 text-sm font-medium text-[#991B1B]">{message}</p> : null}
 
               <button
                 type="submit"
                 disabled={sending || !catalog || items.length === 0 || closed || missing > 0}
-                className={`${focusRing} w-full rounded-full bg-[#C8171E] px-6 py-4 text-base font-bold text-white hover:bg-[#A9121A] disabled:bg-[#D9CFC4]`}
+                className={`${focusRing} w-full rounded-full bg-[#B91C1C] px-6 py-4 text-base font-bold text-white hover:bg-[#991B1B] disabled:bg-[#D9CFC4]`}
               >
                 {sending ? "Enviando pedido..." : `Enviar pedido de ${money(subtotal + fee)}`}
               </button>
@@ -202,7 +202,7 @@ export default function SiteCheckoutPage() {
         </section>
 
         <aside>
-          <div className="rounded-[28px] border border-[#ECE6DF] bg-white p-5 lg:sticky lg:top-8">
+          <div className="rounded-[28px] border border-[#E7E5E4] bg-white p-5 lg:sticky lg:top-8">
             <h2 className={`${displayFont.className} text-xl font-bold`}>Resumo</h2>
             <ul className="mt-3 divide-y divide-[#F1ECE6]">
               {items.map((item) => (
@@ -210,16 +210,16 @@ export default function SiteCheckoutPage() {
                   <span className="min-w-0">
                     <span className="font-medium">{item.quantity}× {item.name}</span>
                     {[item.size, item.crust].filter(Boolean).length > 0 ? (
-                      <span className="block text-xs text-[#857A71]">{[item.size, item.crust].filter(Boolean).join(", ")}</span>
+                      <span className="block text-xs text-[#8A8580]">{[item.size, item.crust].filter(Boolean).join(", ")}</span>
                     ) : null}
                   </span>
                   <span className="whitespace-nowrap">{money(Number(item.price_cents || 0) * item.quantity)}</span>
                 </li>
               ))}
             </ul>
-            <dl className="mt-3 space-y-1.5 border-t border-[#ECE6DF] pt-3 text-sm">
-              <div className="flex justify-between text-[#6B625B]"><dt>Subtotal</dt><dd>{money(subtotal)}</dd></div>
-              <div className="flex justify-between text-[#6B625B]"><dt>Entrega</dt><dd>{fee > 0 ? money(fee) : "Grátis"}</dd></div>
+            <dl className="mt-3 space-y-1.5 border-t border-[#E7E5E4] pt-3 text-sm">
+              <div className="flex justify-between text-[#57534E]"><dt>Subtotal</dt><dd>{money(subtotal)}</dd></div>
+              <div className="flex justify-between text-[#57534E]"><dt>Entrega</dt><dd>{fee > 0 ? money(fee) : "Grátis"}</dd></div>
               <div className="flex justify-between pt-1 text-base font-bold"><dt>Total</dt><dd>{money(subtotal + fee)}</dd></div>
             </dl>
           </div>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { MapPin, MessageCircle, Plus, Search, ShoppingBag } from "lucide-react";
+import { Check, MapPin, MessageCircle, Plus, Search, ShoppingBag } from "lucide-react";
 import {
   CART_CHANGED_EVENT,
   addToCart,
@@ -42,7 +42,7 @@ function needsChoice(product: CatalogProduct) {
 }
 
 const focusRing =
-  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C8171E]";
+  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B91C1C]";
 
 export function HomePage() {
   const { catalog, loading, error, needsStore } = useStoreCatalog();
@@ -149,198 +149,246 @@ export function HomePage() {
     ? `https://wa.me/55${settings.whatsapp.replace(/^55/, "")}`
     : null;
 
+  const statusOpen = catalog?.status.open ?? true;
+  const facts = settings
+    ? [
+        { label: "Entrega", value: formatDeliveryWindow(settings) },
+        {
+          label: "Taxa de entrega",
+          value:
+            settings.deliveryFeeCents > 0
+              ? settings.freeDeliveryAboveCents
+                ? `${money(settings.deliveryFeeCents)} (grátis acima de ${money(settings.freeDeliveryAboveCents)})`
+                : money(settings.deliveryFeeCents)
+              : "Grátis",
+        },
+        {
+          label: "Pedido mínimo",
+          value: settings.minimumOrderCents > 0 ? money(settings.minimumOrderCents) : "Sem mínimo",
+        },
+        ...(catalog && catalog.paymentMethods.length > 0
+          ? [
+              {
+                label: "Pagamento na entrega",
+                value: catalog.paymentMethods
+                  .map((m) => m.label)
+                  .join(", ")
+                  .replace(/, ([^,]*)$/, " ou $1"),
+              },
+            ]
+          : []),
+      ]
+    : [];
+
   return (
-    <main className="min-h-screen bg-[#FCFBF9] text-[#1F1A17]">
-      {/* Barra do topo */}
-      <header className="sticky top-0 z-40 border-b border-[#ECE6DF] bg-[#FCFBF9]/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center gap-4 px-5 py-3">
-          <Link href="/" className={`${displayFont.className} ${focusRing} shrink-0 rounded text-xl font-extrabold text-[#C8171E]`}>
+    <main className="min-h-screen bg-[#F6F5F2] font-sans text-[#1C1917]">
+      {/* Topo (fixo) */}
+      <header className="sticky top-0 z-40 h-[76px] border-b border-[#E7E5E4] bg-white">
+        <div className="mx-auto flex h-full max-w-[1200px] items-center gap-6 px-6">
+          <Link href="/" className={`${displayFont.className} ${focusRing} shrink-0 rounded text-[26px] font-extrabold tracking-[-0.02em] text-[#B91C1C]`}>
             {brand || " "}
           </Link>
 
-          <label className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-[#ECE6DF] bg-white px-4 py-2.5 focus-within:border-[#C8171E]">
-            <Search className="h-4 w-4 shrink-0 text-[#857A71]" />
+          <label className="flex w-full max-w-[520px] min-w-0 items-center gap-2.5 rounded-full border border-[#E7E5E4] bg-[#F6F5F2] px-[18px] py-3 focus-within:border-[#B91C1C] focus-within:bg-white">
+            <Search className="h-[18px] w-[18px] shrink-0 text-[#8A8580]" />
             <span className="sr-only">Buscar no cardápio</span>
             <input
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar pizza, bebida, sobremesa"
-              className="w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-[#A79C93]"
+              className="w-full min-w-0 bg-transparent text-[15px] outline-none placeholder:text-[#8A8580]"
             />
           </label>
+
+          <div className="flex-1" />
+
+          {catalog ? (
+            <button
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              className={`${focusRing} hidden shrink-0 items-center gap-2 rounded-full border border-[#E7E5E4] bg-white py-2.5 pl-3.5 pr-4 text-[15px] hover:border-[#B91C1C] md:inline-flex`}
+            >
+              <MapPin className="h-[18px] w-[18px] text-[#B91C1C]" />
+              <span className="font-medium">{catalog.store.name}</span>
+              <span className="font-semibold text-[#B91C1C]">Trocar</span>
+            </button>
+          ) : null}
 
           <button
             type="button"
             onClick={() => setCartOpen(true)}
             aria-label={`Abrir pedido (${cartCount} itens)`}
-            className={`${focusRing} relative flex shrink-0 items-center gap-2 rounded-full bg-[#1F1A17] px-4 py-2.5 text-sm font-semibold text-white lg:hidden`}
+            className={`${focusRing} relative flex shrink-0 items-center gap-2 rounded-full bg-[#1C1917] px-4 py-2.5 text-sm font-semibold text-white lg:hidden`}
           >
             <ShoppingBag className="h-4 w-4" />
             {cartCount > 0 ? cartCount : null}
           </button>
         </div>
-
-        {categories.length > 1 && !search ? (
-          <nav aria-label="Categorias do cardápio" className="mx-auto max-w-6xl px-5">
-            <ul className="-mb-px flex gap-6 overflow-x-auto [scrollbar-width:none]">
-              {categories.map((cat) => (
-                <li key={cat.key}>
-                  <a
-                    href={`#cat-${cat.key}`}
-                    className={[
-                      focusRing,
-                      "block whitespace-nowrap border-b-2 py-2.5 text-sm font-semibold transition-colors",
-                      activeCat === cat.key
-                        ? "border-[#C8171E] text-[#1F1A17]"
-                        : "border-transparent text-[#857A71] hover:text-[#1F1A17]",
-                    ].join(" ")}
-                  >
-                    {cat.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </nav>
-        ) : null}
       </header>
 
-      {/* Abertura: marca, loja, regras de entrega e os pratos em destaque */}
+      {/* Abertura: a marca e os pratos em destaque */}
       {catalog && !search ? (
-        <section className="mx-auto grid max-w-6xl items-center gap-10 px-5 pb-8 pt-10 lg:grid-cols-[1.05fr_1fr] lg:pt-14">
-          <div>
-            <button
-              type="button"
-              onClick={() => setPickerOpen(true)}
-              className={`${focusRing} inline-flex items-center gap-2 rounded-full border border-[#ECE6DF] bg-white px-3.5 py-1.5 text-sm text-[#4A423C] hover:border-[#C8171E]`}
-            >
-              <MapPin className="h-4 w-4 text-[#C8171E]" />
-              {catalog.store.name}
-              <span className="font-semibold text-[#C8171E]">Trocar</span>
-            </button>
-
-            <h1
-              className={`${displayFont.className} mt-5 text-[clamp(3rem,7vw,5.5rem)] font-extrabold leading-[0.92] tracking-[-0.035em] text-[#1F1A17]`}
-            >
-              {brand}
-            </h1>
-
-            <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-[15px] text-[#4A423C]">
-              <span className="inline-flex items-center gap-2 font-semibold">
-                <span
-                  aria-hidden
-                  className={`h-2.5 w-2.5 rounded-full ${catalog.status.open ? "bg-[#2E7D4F]" : "bg-[#C8171E]"}`}
-                />
-                <span className={catalog.status.open ? "text-[#2E7D4F]" : "text-[#A3141A]"}>
-                  {catalog.status.open ? "Aberta agora" : catalog.status.message}
-                </span>
+        <section className="bg-[#1C1917] text-white">
+          <div className="mx-auto grid max-w-[1200px] items-center gap-10 px-6 py-16 lg:grid-cols-[1fr_520px]">
+            <div>
+              <span
+                className={[
+                  "inline-flex items-center gap-2 rounded-full py-[7px] pl-3 pr-3.5 text-sm font-semibold",
+                  statusOpen ? "bg-[#14532D]/60 text-[#BBF7D0]" : "bg-[#7F1D1D]/60 text-[#FECACA]",
+                ].join(" ")}
+              >
+                <span aria-hidden className={`h-2 w-2 rounded-full ${statusOpen ? "bg-[#4ADE80]" : "bg-[#F87171]"}`} />
+                {statusOpen ? "Aberta agora" : catalog.status.message}
               </span>
-              <span>Entrega em {formatDeliveryWindow(catalog.settings)}</span>
-              <span>
-                {catalog.settings.deliveryFeeCents > 0
-                  ? `Taxa ${money(catalog.settings.deliveryFeeCents)}`
-                  : "Entrega grátis"}
-                {catalog.settings.freeDeliveryAboveCents
-                  ? `, grátis acima de ${money(catalog.settings.freeDeliveryAboveCents)}`
-                  : ""}
-              </span>
-              {catalog.settings.minimumOrderCents > 0 ? (
-                <span>Pedido mínimo {money(catalog.settings.minimumOrderCents)}</span>
-              ) : null}
+
+              <h1
+                className={`${displayFont.className} mt-5 text-[clamp(3.5rem,9vw,7.5rem)] font-extrabold leading-[0.93] tracking-[-0.04em]`}
+              >
+                {brand}
+              </h1>
+
+              <p className="mt-5 max-w-[34rem] text-lg leading-relaxed text-[#D6D3D1] md:text-xl">
+                Peça online na {catalog.store.name} e acompanhe o pedido até a sua porta.
+              </p>
+
+              <div className="mt-7 flex flex-wrap items-center gap-4">
+                <a
+                  href="#cardapio"
+                  className="rounded-full bg-[#B91C1C] px-7 py-4 text-base font-bold text-white hover:bg-[#991B1B] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                >
+                  Ver o cardápio
+                </a>
+                {whatsappHref ? (
+                  <a
+                    href={whatsappHref}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 rounded-full px-2 py-2 text-sm font-semibold text-[#D6D3D1] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    Falar com a loja
+                  </a>
+                ) : null}
+              </div>
             </div>
 
-            {catalog.paymentMethods.length > 0 ? (
-              <p className="mt-3 text-sm text-[#857A71]">
-                Pague na entrega com {catalog.paymentMethods.map((m) => m.label).join(", ")}.
-              </p>
-            ) : null}
-
-            {whatsappHref ? (
-              <a
-                href={whatsappHref}
-                target="_blank"
-                rel="noreferrer"
-                className={`${focusRing} mt-5 inline-flex items-center gap-2 rounded-full text-sm font-semibold text-[#2E7D4F] hover:underline`}
-              >
-                <MessageCircle className="h-4 w-4" />
-                Falar com a loja no WhatsApp
-              </a>
+            {featured.length > 0 ? (
+              <div className="relative mx-auto hidden h-[380px] w-[520px] lg:block">
+                {featured.map((product, index) => {
+                  const layout = [
+                    { size: 300, left: 130, top: 20, z: 3 },
+                    { size: 156, left: 0, top: 200, z: 2 },
+                    { size: 140, left: 380, top: 0, z: 1 },
+                  ][index];
+                  return (
+                    <button
+                      type="button"
+                      key={product.id}
+                      onClick={() => openOrAdd(product)}
+                      aria-label={`${product.name}, ${money(product.price_cents)}`}
+                      className="group absolute rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
+                      style={{ left: layout.left, top: layout.top, zIndex: layout.z }}
+                    >
+                      <Plate
+                        src={product.image}
+                        name={product.name}
+                        size={layout.size}
+                        ring={layout.size > 200 ? 6 : 4}
+                        shadow="0 18px 40px rgba(0,0,0,0.45)"
+                        className="transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transition-none"
+                      />
+                      <span className="absolute -bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-white px-3 py-1.5 text-[13px] font-semibold text-[#1C1917]">
+                        {product.name} <span className="text-[#B91C1C]">{money(product.price_cents)}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             ) : null}
           </div>
-
-          {featured.length > 0 ? (
-            <div className="relative mx-auto flex h-[340px] w-full max-w-[460px] items-center justify-center">
-              {featured.map((product, index) => {
-                // Pratos sobrepostos: o principal grande no centro, os outros menores ao lado.
-                const layout = [
-                  { size: 250, style: { left: "50%", top: "46%", transform: "translate(-50%,-50%)", zIndex: 3 } },
-                  { size: 150, style: { left: "2%", top: "62%", zIndex: 2 } },
-                  { size: 140, style: { right: "0%", top: "4%", zIndex: 1 } },
-                ][index];
-                return (
-                  <button
-                    type="button"
-                    key={product.id}
-                    onClick={() => openOrAdd(product)}
-                    className={`${focusRing} group absolute rounded-full ${index > 0 ? "hidden sm:block" : ""}`}
-                    style={layout.style}
-                    aria-label={`${product.name}, ${money(product.price_cents)}`}
-                  >
-                    <Plate
-                      src={product.image}
-                      name={product.name}
-                      size={layout.size}
-                      className="shadow-[0_18px_40px_rgba(70,40,20,0.22)] transition-transform group-hover:scale-[1.03]"
-                    />
-                    <span
-                      className={[
-                        "absolute left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#1F1A17] shadow-sm",
-                        index === 0 ? "-bottom-3" : "-bottom-2",
-                      ].join(" ")}
-                    >
-                      {product.name} <span className="text-[#C8171E]">{money(product.price_cents)}</span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
         </section>
       ) : null}
 
-      {/* Cardapio + carrinho */}
-      <div className="mx-auto grid max-w-6xl gap-10 px-5 pb-28 pt-4 lg:grid-cols-[1fr_340px]">
-        <div>
+      {/* Informações da loja */}
+      {facts.length > 0 && !search ? (
+        <section className="border-b border-[#E7E5E4] bg-white">
+          <dl className="mx-auto flex max-w-[1200px] flex-wrap px-6">
+            {facts.map((f, i) => (
+              <div
+                key={f.label}
+                className={[
+                  "py-5 pr-8",
+                  i > 0 ? "border-l border-[#E7E5E4] pl-8" : "",
+                ].join(" ")}
+              >
+                <dt className="text-sm text-[#8A8580]">{f.label}</dt>
+                <dd className="mt-1 text-lg font-semibold">{f.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      ) : null}
+
+      {/* Categorias (fixas abaixo do topo) */}
+      {categories.length > 1 && !search ? (
+        <nav aria-label="Categorias do cardápio" className="sticky top-[76px] z-30 border-b border-[#E7E5E4] bg-[#F6F5F2]/95 backdrop-blur">
+          <ul className="mx-auto flex max-w-[1200px] gap-8 overflow-x-auto px-6 pt-4 [scrollbar-width:none]">
+            {categories.map((cat) => (
+              <li key={cat.key}>
+                <a
+                  href={`#cat-${cat.key}`}
+                  className={[
+                    focusRing,
+                    "block whitespace-nowrap border-b-[3px] pb-3 text-base transition-colors",
+                    activeCat === cat.key
+                      ? "border-[#B91C1C] font-semibold text-[#1C1917]"
+                      : "border-transparent font-medium text-[#8A8580] hover:text-[#1C1917]",
+                  ].join(" ")}
+                >
+                  {cat.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      ) : null}
+
+      {/* Cardápio + pedido */}
+      <div id="cardapio" className="mx-auto grid max-w-[1200px] scroll-mt-32 gap-8 px-6 pb-20 pt-6 lg:grid-cols-[1fr_360px]">
+        <div className="space-y-6">
           {needsStore ? null : loading ? (
-            <p className="py-10 text-[#857A71]">Carregando o cardápio...</p>
+            <p className="py-10 text-[#8A8580]">Carregando o cardápio...</p>
           ) : error ? (
-            <p className="rounded-2xl bg-[#FDEDEC] p-5 text-sm font-medium text-[#A3141A]">{error}</p>
+            <p className="rounded-2xl bg-[#FDEDEC] p-5 text-sm font-medium text-[#991B1B]">{error}</p>
           ) : search && products.length === 0 ? (
-            <p className="py-10 text-[#857A71]">Nada encontrado para “{search}”. Tente outro nome.</p>
+            <p className="py-10 text-[#8A8580]">Nada encontrado para “{search}”. Tente outro nome.</p>
           ) : categories.length === 0 ? (
-            <p className="py-10 text-[#857A71]">Esta loja ainda não tem produtos à venda.</p>
+            <p className="py-10 text-[#8A8580]">Esta loja ainda não tem produtos à venda.</p>
           ) : (
             categories.map((cat) => {
               const items = products.filter((p) => p.category === cat.key);
               if (items.length === 0) return null;
 
               return (
-                <section key={cat.key} id={`cat-${cat.key}`} className="scroll-mt-32 pt-6">
-                  <h2 className={`${displayFont.className} text-[28px] font-bold tracking-[-0.02em]`}>
-                    {cat.label}
-                  </h2>
+                <section
+                  key={cat.key}
+                  id={`cat-${cat.key}`}
+                  className="scroll-mt-[150px] rounded-[20px] border border-[#E7E5E4] bg-white px-7 pb-2 pt-6"
+                >
+                  <h2 className={`${displayFont.className} mb-3 text-[30px] font-bold tracking-[-0.02em]`}>{cat.label}</h2>
 
-                  <ul className="mt-2 divide-y divide-[#ECE6DF]">
+                  <ul>
                     {cat.key === "pizza" && !search && pizzas.length >= 2 ? (
-                      <li className="flex items-center gap-5 py-5">
+                      <li className="flex items-center gap-6 border-t border-[#E7E5E4] py-5">
                         <div className="min-w-0 flex-1">
-                          <p className="text-[17px] font-semibold">Pizza meio a meio</p>
-                          <p className="mt-1 text-sm text-[#6B625B]">Dois sabores na mesma pizza. Você escolhe as metades.</p>
+                          <p className="text-lg font-semibold">Pizza meio a meio</p>
+                          <p className="mt-1 text-[15px] text-[#57534E]">Dois sabores na mesma pizza. Você escolhe as metades.</p>
                         </div>
                         <button
                           type="button"
                           onClick={() => setHalfHalfOpen(true)}
-                          className={`${focusRing} shrink-0 rounded-full border border-[#C8171E] px-4 py-2 text-sm font-semibold text-[#C8171E] hover:bg-[#C8171E] hover:text-white`}
+                          className={`${focusRing} shrink-0 rounded-full border-[1.5px] border-[#B91C1C] px-5 py-2.5 text-[15px] font-semibold text-[#B91C1C] hover:bg-[#B91C1C] hover:text-white`}
                         >
                           Montar
                         </button>
@@ -350,52 +398,41 @@ export function HomePage() {
                     {items.map((product) => {
                       const choose = needsChoice(product);
                       return (
-                        <li key={product.id} className="flex items-center gap-5 py-5">
+                        <li key={product.id} className="flex items-center gap-6 border-t border-[#E7E5E4] py-5">
                           <button
                             type="button"
                             onClick={() => openOrAdd(product)}
                             className={`${focusRing} min-w-0 flex-1 rounded-lg text-left`}
                           >
-                            <div className="flex items-baseline gap-3">
-                              <span className="text-[17px] font-semibold">{product.name}</span>
-                              <span aria-hidden className="mb-1 flex-1 border-b border-dotted border-[#D4C9BE]" />
-                              <span className="whitespace-nowrap text-[17px] font-semibold text-[#C8171E]">
-                                {choose && product.category === "pizza" ? "a partir de " : ""}
+                            <span className="flex items-baseline gap-3">
+                              <span className="text-lg font-semibold">{product.name}</span>
+                              <span aria-hidden className="mb-1.5 flex-1 border-b border-dotted border-[#D6D0C8]" />
+                              <span className="whitespace-nowrap text-lg font-semibold text-[#B91C1C]">
+                                {choose && detectProductKind(product) === "pizza" ? "a partir de " : ""}
                                 {money(product.price_cents)}
                               </span>
-                            </div>
+                            </span>
                             {product.description ? (
-                              <p className="mt-1 max-w-[60ch] text-sm leading-relaxed text-[#6B625B]">
+                              <span className="mt-1.5 block max-w-[60ch] text-[15px] leading-relaxed text-[#57534E]">
                                 {product.description}
-                              </p>
+                              </span>
                             ) : null}
                           </button>
 
                           <div className="relative shrink-0">
-                            <Plate src={product.image} name={product.name} size={88} />
-                            {choose ? (
-                              <button
-                                type="button"
-                                onClick={() => setOpenProduct(product)}
-                                aria-label={`Escolher opções de ${product.name}`}
-                                className={`${focusRing} absolute -bottom-1 -right-1 grid h-9 w-9 place-items-center rounded-full bg-[#C8171E] text-white shadow-md hover:bg-[#A9121A]`}
-                              >
-                                <Plus className="h-4 w-4" />
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => handleAdd(product)}
-                                aria-label={`Adicionar ${product.name} ao carrinho`}
-                                className={[
-                                  focusRing,
-                                  "absolute -bottom-1 -right-1 grid h-9 w-9 place-items-center rounded-full text-white shadow-md transition-colors",
-                                  justAdded === product.id ? "bg-[#2E7D4F]" : "bg-[#C8171E] hover:bg-[#A9121A]",
-                                ].join(" ")}
-                              >
-                                {justAdded === product.id ? <span className="text-sm font-bold">✓</span> : <Plus className="h-4 w-4" />}
-                              </button>
-                            )}
+                            <Plate src={product.image} name={product.name} size={88} ring={3} />
+                            <button
+                              type="button"
+                              onClick={() => openOrAdd(product)}
+                              aria-label={choose ? `Escolher opções de ${product.name}` : `Adicionar ${product.name} ao pedido`}
+                              className={[
+                                focusRing,
+                                "absolute -bottom-1 -right-1 grid h-[38px] w-[38px] place-items-center rounded-full text-white shadow-[0_4px_10px_rgba(185,28,28,0.3)] transition-colors",
+                                justAdded === product.id ? "bg-[#15803D]" : "bg-[#B91C1C] hover:bg-[#991B1B]",
+                              ].join(" ")}
+                            >
+                              {justAdded === product.id ? <Check className="h-[18px] w-[18px]" /> : <Plus className="h-[18px] w-[18px]" />}
+                            </button>
                           </div>
                         </li>
                       );
@@ -408,30 +445,28 @@ export function HomePage() {
         </div>
 
         <aside className="hidden lg:block">
-          <div className="sticky top-32">
+          <div className="sticky top-[150px]">
             <SiteCart items={cartItems} catalog={catalog} />
           </div>
         </aside>
       </div>
 
-      <footer className="border-t border-[#ECE6DF]">
-        <div className="mx-auto flex max-w-6xl flex-col gap-2 px-5 py-8 text-sm text-[#857A71] sm:flex-row sm:justify-between">
+      <footer className="border-t border-[#E7E5E4] bg-white">
+        <div className="mx-auto flex max-w-[1200px] flex-col gap-2 px-6 py-7 text-sm text-[#8A8580] sm:flex-row sm:justify-between">
           <span>
             {brand} {catalog ? `— ${catalog.store.name}` : ""}
           </span>
-          <div className="flex gap-5">
-            <Link href="/admin/login" className={`${focusRing} rounded hover:text-[#1F1A17]`}>Área do lojista</Link>
-          </div>
+          <Link href="/admin/login" className={`${focusRing} rounded font-medium hover:text-[#1C1917]`}>Área do lojista</Link>
         </div>
       </footer>
 
-      {/* Celular/tablet: barra do carrinho */}
+      {/* Telas menores: barra do pedido */}
       {cartCount > 0 ? (
         <div className="fixed inset-x-0 bottom-4 z-40 px-5 lg:hidden">
           <button
             type="button"
             onClick={() => setCartOpen(true)}
-            className={`${focusRing} mx-auto flex w-full max-w-md items-center justify-between rounded-full bg-[#C8171E] px-6 py-4 text-sm font-bold text-white shadow-[0_16px_40px_rgba(200,23,30,0.35)]`}
+            className={`${focusRing} mx-auto flex w-full max-w-md items-center justify-between rounded-full bg-[#B91C1C] px-6 py-4 text-sm font-bold text-white shadow-[0_16px_40px_rgba(185,28,28,0.35)]`}
           >
             <span>Ver pedido ({cartCount})</span>
             <span>{money(cartItems.reduce((s, i) => s + Number(i.price_cents || 0) * i.quantity, 0))}</span>
@@ -453,7 +488,7 @@ export function HomePage() {
       </SiteDialog>
 
       {toast ? (
-        <div role="status" className="fixed left-1/2 top-20 z-[95] -translate-x-1/2 rounded-full bg-[#1F1A17] px-5 py-3 text-sm font-semibold text-white shadow-lg">
+        <div role="status" className="fixed left-1/2 top-24 z-[95] -translate-x-1/2 rounded-full bg-[#1C1917] px-5 py-3 text-sm font-semibold text-white shadow-lg">
           {toast}
         </div>
       ) : null}

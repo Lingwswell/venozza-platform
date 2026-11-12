@@ -105,13 +105,13 @@ function HalfHalfForm({
     <>
       <div className="px-6 pb-6 pt-8">
         <h2 className={`${displayFont.className} pr-10 text-[28px] font-bold tracking-[-0.02em]`}>Pizza meio a meio</h2>
-        <p className="mt-1 text-sm text-[#6B625B]">
+        <p className="mt-1 text-sm text-[#57534E]">
           {familySize ? `${familySize.name}. ` : ""}Escolha 2 sabores. O preço é o do sabor mais caro.
         </p>
 
         <fieldset className="mt-5">
-          <legend className="text-base font-semibold text-[#1F1A17]">
-            Sabores <span className="font-normal text-[#857A71]">({flavors.length} de 2)</span>
+          <legend className="text-base font-semibold text-[#1C1917]">
+            Sabores <span className="font-normal text-[#8A8580]">({flavors.length} de 2)</span>
           </legend>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             {pizzas.map((pizza) => {
@@ -125,15 +125,15 @@ function HalfHalfForm({
                   className={[
                     focusRing,
                     "flex items-center gap-3 rounded-2xl border px-3 py-2.5 text-left text-sm transition-colors",
-                    on ? "border-[#C8171E] bg-[#FDF2F1]" : "border-[#ECE6DF] hover:border-[#D4C9BE]",
+                    on ? "border-[#B91C1C] bg-[#FDF2F1]" : "border-[#E7E5E4] hover:border-[#D4C9BE]",
                   ].join(" ")}
                 >
-                  <Plate src={pizza.image} name={pizza.name} size={44} className="ring-2" />
+                  <Plate src={pizza.image} name={pizza.name} size={44} ring={2} />
                   <span className="min-w-0 flex-1">
-                    <span className="block font-medium text-[#1F1A17]">{pizza.name}</span>
-                    <span className="text-[#6B625B]">{money(pizza.price_cents)}</span>
+                    <span className="block font-medium text-[#1C1917]">{pizza.name}</span>
+                    <span className="text-[#57534E]">{money(pizza.price_cents)}</span>
                   </span>
-                  {on ? <span className="text-xs font-bold text-[#C8171E]">{flavorIds.indexOf(pizza.id) + 1}ª metade</span> : null}
+                  {on ? <span className="text-xs font-bold text-[#B91C1C]">{flavorIds.indexOf(pizza.id) + 1}ª metade</span> : null}
                 </button>
               );
             })}
@@ -141,7 +141,7 @@ function HalfHalfForm({
         </fieldset>
 
         <div className="mt-5 space-y-5">
-          {loading ? <p className="text-sm text-[#857A71]">Carregando opções...</p> : null}
+          {loading ? <p className="text-sm text-[#8A8580]">Carregando opções...</p> : null}
           <ChoiceGroup title="Borda" name="borda-mm" options={catalog.pizzaBorders} value={border.id} onChange={setBorderId} />
           <ChoiceGroup title="Massa" name="massa-mm" options={catalog.pizzaDoughs} value={dough.id} onChange={setDoughId} />
           <DrinkCounters
@@ -149,13 +149,13 @@ function HalfHalfForm({
             quantities={drinkQty}
             onChange={(id, q) => setDrinkQty((cur) => ({ ...cur, [id]: Math.max(0, q) }))}
           />
-          <label className="block border-t border-[#ECE6DF] pt-5">
-            <span className="text-base font-semibold text-[#1F1A17]">Alguma observação?</span>
+          <label className="block border-t border-[#E7E5E4] pt-5">
+            <span className="text-base font-semibold text-[#1C1917]">Alguma observação?</span>
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value.slice(0, 200))}
               rows={2}
-              className="mt-2 w-full rounded-2xl border border-[#ECE6DF] px-4 py-3 text-sm outline-none focus:border-[#C8171E]"
+              className="mt-2 w-full rounded-2xl border border-[#E7E5E4] px-4 py-3 text-sm outline-none focus:border-[#B91C1C]"
             />
           </label>
         </div>

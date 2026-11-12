@@ -46,7 +46,7 @@ export default function SiteDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[90] flex items-end justify-center bg-[#1F1A17]/50 sm:items-center sm:p-6"
+      className="fixed inset-0 z-[90] flex items-end justify-center bg-[#1C1917]/50 sm:items-center sm:p-6"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -63,7 +63,7 @@ export default function SiteDialog({
           type="button"
           onClick={onClose}
           aria-label="Fechar"
-          className={`${focusRing} absolute right-4 top-4 z-10 grid h-10 w-10 place-items-center rounded-full bg-white/90 text-[#1F1A17] shadow-sm hover:bg-white`}
+          className={`${focusRing} absolute right-4 top-4 z-10 grid h-10 w-10 place-items-center rounded-full bg-white/90 text-[#1C1917] shadow-sm hover:bg-white`}
         >
           <X className="h-5 w-5" />
         </button>
