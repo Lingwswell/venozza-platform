@@ -22,6 +22,10 @@ import type { CartItem } from "@/types/order";
 import StorePicker from "@/components/store/StorePicker";
 import Plate from "@/components/site/Plate";
 import SiteCart from "@/components/site/SiteCart";
+import SiteDialog from "@/components/site/SiteDialog";
+import ProductDialog from "@/components/site/ProductDialog";
+import HalfHalfDialog from "@/components/site/HalfHalfDialog";
+import { detectProductKind } from "@/lib/catalog/cart-items";
 import { displayFont } from "@/lib/fonts";
 
 // Site da loja (computador). Mesma fonte de dados do app: /api/catalog.
@@ -31,9 +35,10 @@ function money(cents: number) {
   return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-// Pizza (e produto montavel) abre a tela de escolha; o resto vai direto ao carrinho.
+// Pizza e batata abrem a janela de escolha (dentro do site); o resto vai direto ao carrinho.
 function needsChoice(product: CatalogProduct) {
-  return product.category === "pizza" || product.customizationType !== "auto";
+  const kind = detectProductKind(product);
+  return kind === "pizza" || kind === "batata";
 }
 
 const focusRing =
@@ -46,6 +51,20 @@ export function HomePage() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [activeCat, setActiveCat] = useState("");
   const [justAdded, setJustAdded] = useState<string | null>(null);
+  const [openProduct, setOpenProduct] = useState<CatalogProduct | null>(null);
+  const [halfHalfOpen, setHalfHalfOpen] = useState(false);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [toast, setToast] = useState("");
+
+  function showToast(text: string) {
+    setToast(text);
+    setTimeout(() => setToast((t) => (t === text ? "" : t)), 2200);
+  }
+
+  function openOrAdd(product: CatalogProduct) {
+    if (needsChoice(product)) setOpenProduct(product);
+    else handleAdd(product);
+  }
 
   const storeId = catalog?.store.id || "";
 
@@ -115,7 +134,13 @@ export function HomePage() {
     });
     setJustAdded(product.id);
     setTimeout(() => setJustAdded((c) => (c === product.id ? null : c)), 1400);
+    showToast(`${product.name} adicionado ao pedido`);
   }
+
+  const pizzas = useMemo(
+    () => (catalog?.products || []).filter((p) => detectProductKind(p) === "pizza"),
+    [catalog]
+  );
 
   const brand = catalog?.store.brandName || "";
   const settings = catalog?.settings;
@@ -145,13 +170,15 @@ export function HomePage() {
             />
           </label>
 
-          <Link
-            href="/m/carrinho"
+          <button
+            type="button"
+            onClick={() => setCartOpen(true)}
+            aria-label={`Abrir pedido (${cartCount} itens)`}
             className={`${focusRing} relative flex shrink-0 items-center gap-2 rounded-full bg-[#1F1A17] px-4 py-2.5 text-sm font-semibold text-white lg:hidden`}
           >
             <ShoppingBag className="h-4 w-4" />
             {cartCount > 0 ? cartCount : null}
-          </Link>
+          </button>
         </div>
 
         {categories.length > 1 && !search ? (
@@ -251,9 +278,10 @@ export function HomePage() {
                   { size: 140, style: { right: "0%", top: "4%", zIndex: 1 } },
                 ][index];
                 return (
-                  <Link
+                  <button
+                    type="button"
                     key={product.id}
-                    href={`/m/produto/${product.id}`}
+                    onClick={() => openOrAdd(product)}
                     className={`${focusRing} group absolute rounded-full ${index > 0 ? "hidden sm:block" : ""}`}
                     style={layout.style}
                     aria-label={`${product.name}, ${money(product.price_cents)}`}
@@ -272,7 +300,7 @@ export function HomePage() {
                     >
                       {product.name} <span className="text-[#C8171E]">{money(product.price_cents)}</span>
                     </span>
-                  </Link>
+                  </button>
                 );
               })}
             </div>
@@ -303,18 +331,19 @@ export function HomePage() {
                   </h2>
 
                   <ul className="mt-2 divide-y divide-[#ECE6DF]">
-                    {cat.key === "pizza" && !search ? (
+                    {cat.key === "pizza" && !search && pizzas.length >= 2 ? (
                       <li className="flex items-center gap-5 py-5">
                         <div className="min-w-0 flex-1">
                           <p className="text-[17px] font-semibold">Pizza meio a meio</p>
                           <p className="mt-1 text-sm text-[#6B625B]">Dois sabores na mesma pizza. Você escolhe as metades.</p>
                         </div>
-                        <Link
-                          href="/m/meio-a-meio"
+                        <button
+                          type="button"
+                          onClick={() => setHalfHalfOpen(true)}
                           className={`${focusRing} shrink-0 rounded-full border border-[#C8171E] px-4 py-2 text-sm font-semibold text-[#C8171E] hover:bg-[#C8171E] hover:text-white`}
                         >
                           Montar
-                        </Link>
+                        </button>
                       </li>
                     ) : null}
 
@@ -322,7 +351,11 @@ export function HomePage() {
                       const choose = needsChoice(product);
                       return (
                         <li key={product.id} className="flex items-center gap-5 py-5">
-                          <Link href={`/m/produto/${product.id}`} className={`${focusRing} min-w-0 flex-1 rounded-lg`}>
+                          <button
+                            type="button"
+                            onClick={() => openOrAdd(product)}
+                            className={`${focusRing} min-w-0 flex-1 rounded-lg text-left`}
+                          >
                             <div className="flex items-baseline gap-3">
                               <span className="text-[17px] font-semibold">{product.name}</span>
                               <span aria-hidden className="mb-1 flex-1 border-b border-dotted border-[#D4C9BE]" />
@@ -336,18 +369,19 @@ export function HomePage() {
                                 {product.description}
                               </p>
                             ) : null}
-                          </Link>
+                          </button>
 
                           <div className="relative shrink-0">
                             <Plate src={product.image} name={product.name} size={88} />
                             {choose ? (
-                              <Link
-                                href={`/m/produto/${product.id}`}
-                                aria-label={`Escolher tamanho e borda de ${product.name}`}
+                              <button
+                                type="button"
+                                onClick={() => setOpenProduct(product)}
+                                aria-label={`Escolher opções de ${product.name}`}
                                 className={`${focusRing} absolute -bottom-1 -right-1 grid h-9 w-9 place-items-center rounded-full bg-[#C8171E] text-white shadow-md hover:bg-[#A9121A]`}
                               >
                                 <Plus className="h-4 w-4" />
-                              </Link>
+                              </button>
                             ) : (
                               <button
                                 type="button"
@@ -386,7 +420,6 @@ export function HomePage() {
             {brand} {catalog ? `— ${catalog.store.name}` : ""}
           </span>
           <div className="flex gap-5">
-            <Link href="/m" className={`${focusRing} rounded hover:text-[#1F1A17]`}>Abrir no celular</Link>
             <Link href="/admin/login" className={`${focusRing} rounded hover:text-[#1F1A17]`}>Área do lojista</Link>
           </div>
         </div>
@@ -395,13 +428,33 @@ export function HomePage() {
       {/* Celular/tablet: barra do carrinho */}
       {cartCount > 0 ? (
         <div className="fixed inset-x-0 bottom-4 z-40 px-5 lg:hidden">
-          <Link
-            href="/m/carrinho"
-            className={`${focusRing} mx-auto flex max-w-md items-center justify-between rounded-full bg-[#C8171E] px-6 py-4 text-sm font-bold text-white shadow-[0_16px_40px_rgba(200,23,30,0.35)]`}
+          <button
+            type="button"
+            onClick={() => setCartOpen(true)}
+            className={`${focusRing} mx-auto flex w-full max-w-md items-center justify-between rounded-full bg-[#C8171E] px-6 py-4 text-sm font-bold text-white shadow-[0_16px_40px_rgba(200,23,30,0.35)]`}
           >
-            <span>Ver carrinho ({cartCount})</span>
+            <span>Ver pedido ({cartCount})</span>
             <span>{money(cartItems.reduce((s, i) => s + Number(i.price_cents || 0) * i.quantity, 0))}</span>
-          </Link>
+          </button>
+        </div>
+      ) : null}
+
+      <ProductDialog product={openProduct} onClose={() => setOpenProduct(null)} onAdded={(name) => showToast(`${name} adicionado ao pedido`)} />
+      <HalfHalfDialog
+        open={halfHalfOpen}
+        pizzas={pizzas}
+        onClose={() => setHalfHalfOpen(false)}
+        onAdded={(name) => showToast(`${name} adicionada ao pedido`)}
+      />
+      <SiteDialog open={cartOpen} onClose={() => setCartOpen(false)} label="Seu pedido">
+        <div className="p-4 pt-14">
+          <SiteCart items={cartItems} catalog={catalog} />
+        </div>
+      </SiteDialog>
+
+      {toast ? (
+        <div role="status" className="fixed left-1/2 top-20 z-[95] -translate-x-1/2 rounded-full bg-[#1F1A17] px-5 py-3 text-sm font-semibold text-white shadow-lg">
+          {toast}
         </div>
       ) : null}
 

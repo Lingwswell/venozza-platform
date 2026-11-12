@@ -103,7 +103,7 @@ export default function SiteCart({
           ) : null}
 
           <Link
-            href="/m/checkout"
+            href="/checkout"
             aria-disabled={closed || missing > 0}
             className={[
               "mt-4 flex items-center justify-center rounded-full px-5 py-3.5 text-sm font-bold text-white transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C8171E]",

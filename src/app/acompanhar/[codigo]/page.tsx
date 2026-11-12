@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import OrderStatusTracker from "@/components/order/OrderStatusTracker";
 
@@ -87,6 +88,9 @@ export default function AcompanharPedidoPage({
   return (
     <main className="min-h-screen bg-[#f8f5ef] px-4 py-8">
       <div className="mx-auto max-w-3xl space-y-6">
+        <Link href="/" className="inline-block text-sm font-semibold text-neutral-600 hover:text-neutral-900">
+          ← Voltar ao cardápio
+        </Link>
         <header className="rounded-3xl bg-neutral-900 p-6 text-white shadow-lg">
           <p className="text-sm uppercase tracking-[0.2em] text-neutral-300">
             Acompanhamento
