@@ -58,6 +58,9 @@ export async function GET(req: NextRequest) {
         slug: true,
         city: true,
         state: true,
+        addressStreet: true,
+        addressNumber: true,
+        addressNeighborhood: true,
         tenantId: true,
         tenant: { select: { name: true, slug: true } },
       },
@@ -188,6 +191,15 @@ export async function GET(req: NextRequest) {
         slug: store.slug,
         city: store.city,
         state: store.state,
+        // Endereco em uma linha (rodape do site); null se nao cadastrado.
+        address:
+          [
+            [store.addressStreet, store.addressNumber].filter(Boolean).join(", "),
+            store.addressNeighborhood,
+            [store.city, store.state].filter(Boolean).join(" - "),
+          ]
+            .filter(Boolean)
+            .join(", ") || null,
         tenantId: store.tenantId,
         brandName: store.tenant.name,
       },

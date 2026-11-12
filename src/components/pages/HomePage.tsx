@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Check, MapPin, MessageCircle, Plus, Search, ShoppingBag } from "lucide-react";
+import { ArrowDown, Banknote, Bike, Check, Clock3, MapPin, MessageCircle, Plus, Search, ShoppingBag, ShoppingCart } from "lucide-react";
 import {
   CART_CHANGED_EVENT,
   addToCart,
@@ -150,11 +150,12 @@ export function HomePage() {
     : null;
 
   const statusOpen = catalog?.status.open ?? true;
-  const facts = settings
+  const facts: { label: string; value: string; icon: React.ComponentType<{ className?: string }> }[] = settings
     ? [
-        { label: "Entrega", value: formatDeliveryWindow(settings) },
+        { label: "Entrega", value: formatDeliveryWindow(settings), icon: Clock3 },
         {
           label: "Taxa de entrega",
+          icon: Bike,
           value:
             settings.deliveryFeeCents > 0
               ? settings.freeDeliveryAboveCents
@@ -164,12 +165,14 @@ export function HomePage() {
         },
         {
           label: "Pedido mínimo",
+          icon: ShoppingCart,
           value: settings.minimumOrderCents > 0 ? money(settings.minimumOrderCents) : "Sem mínimo",
         },
         ...(catalog && catalog.paymentMethods.length > 0
           ? [
               {
                 label: "Pagamento na entrega",
+                icon: Banknote,
                 value: catalog.paymentMethods
                   .map((m) => m.label)
                   .join(", ")
@@ -255,9 +258,10 @@ export function HomePage() {
               <div className="mt-7 flex flex-wrap items-center gap-4">
                 <a
                   href="#cardapio"
-                  className="rounded-full bg-[#B91C1C] px-7 py-4 text-base font-bold text-white hover:bg-[#991B1B] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                  className="inline-flex items-center gap-2 rounded-full bg-[#B91C1C] px-7 py-4 text-base font-bold text-white shadow-[0_10px_30px_rgba(185,28,28,0.35)] hover:bg-[#991B1B] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
                 >
                   Ver o cardápio
+                  <ArrowDown aria-hidden className="h-[18px] w-[18px]" />
                 </a>
                 {whatsappHref ? (
                   <a
@@ -298,7 +302,12 @@ export function HomePage() {
                         shadow="0 18px 40px rgba(0,0,0,0.45)"
                         className="transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transition-none"
                       />
-                      <span className="absolute -bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-white px-3 py-1.5 text-[13px] font-semibold text-[#1C1917]">
+                      <span
+                        className={[
+                          "absolute -bottom-3 whitespace-nowrap rounded-full bg-white px-3 py-1.5 text-[13px] font-semibold text-[#1C1917] shadow-sm",
+                          index === 0 ? "left-1/2 -translate-x-1/2" : index === 1 ? "left-0" : "right-0",
+                        ].join(" ")}
+                      >
                         {product.name} <span className="text-[#B91C1C]">{money(product.price_cents)}</span>
                       </span>
                     </button>
@@ -318,12 +327,17 @@ export function HomePage() {
               <div
                 key={f.label}
                 className={[
-                  "py-5 pr-8",
+                  "flex items-center gap-3.5 py-5 pr-8",
                   i > 0 ? "border-l border-[#E7E5E4] pl-8" : "",
                 ].join(" ")}
               >
-                <dt className="text-sm text-[#8A8580]">{f.label}</dt>
-                <dd className="mt-1 text-lg font-semibold">{f.value}</dd>
+                <span aria-hidden className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#F6F5F2] text-[#B91C1C]">
+                  <f.icon className="h-[18px] w-[18px]" />
+                </span>
+                <div>
+                  <dt className="text-sm text-[#8A8580]">{f.label}</dt>
+                  <dd className="mt-0.5 text-lg font-semibold">{f.value}</dd>
+                </div>
               </div>
             ))}
           </dl>
@@ -383,7 +397,7 @@ export function HomePage() {
                       <li className="flex items-center gap-6 border-t border-[#E7E5E4] py-5">
                         <div className="min-w-0 flex-1">
                           <p className="text-lg font-semibold">Pizza meio a meio</p>
-                          <p className="mt-1 text-[15px] text-[#57534E]">Dois sabores na mesma pizza. Você escolhe as metades.</p>
+                          <p className="mt-1 text-[15px] text-[#57534E]">Dois sabores na mesma pizza. Você escolhe as metades; o preço é o do sabor mais caro.</p>
                         </div>
                         <button
                           type="button"
@@ -454,7 +468,9 @@ export function HomePage() {
       <footer className="border-t border-[#E7E5E4] bg-white">
         <div className="mx-auto flex max-w-[1200px] flex-col gap-2 px-6 py-7 text-sm text-[#8A8580] sm:flex-row sm:justify-between">
           <span>
-            {brand} {catalog ? `— ${catalog.store.name}` : ""}
+            <span className="font-semibold text-[#1C1917]">{brand}</span>
+            {catalog ? ` — ${catalog.store.name}` : ""}
+            {catalog?.store.address ? `, ${catalog.store.address}` : ""}
           </span>
           <Link href="/admin/login" className={`${focusRing} rounded font-medium hover:text-[#1C1917]`}>Área do lojista</Link>
         </div>

@@ -50,6 +50,7 @@ export type StoreCatalog = {
     slug: string;
     city: string | null;
     state: string | null;
+    address: string | null;
     tenantId: string;
     brandName: string;
   };

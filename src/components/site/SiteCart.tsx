@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Minus, Plus, ShoppingBag } from "lucide-react";
+import { Minus, Plus, ShoppingBag, ShoppingCart } from "lucide-react";
 import type { CartItem } from "@/types/order";
 import { cartLineKey, changeCartLineQuantity } from "@/lib/cart-storage";
 import type { StoreCatalog } from "@/lib/catalog/use-store-catalog";
@@ -21,6 +21,7 @@ export default function SiteCart({
   catalog: StoreCatalog | null;
 }) {
   const subtotal = items.reduce((sum, i) => sum + Number(i.price_cents || 0) * i.quantity, 0);
+  const count = items.reduce((sum, i) => sum + i.quantity, 0);
   const settings = catalog ? { ...DEFAULT_STORE_SETTINGS, ...catalog.settings } : null;
   const fee = settings ? computeDeliveryFeeCents(settings, subtotal) : 0;
   const minimum = settings?.minimumOrderCents || 0;
@@ -29,7 +30,17 @@ export default function SiteCart({
 
   return (
     <div className="rounded-[20px] border border-[#E7E5E4] bg-white p-6">
-      <h2 className={`${displayFont.className} text-2xl font-bold tracking-[-0.02em] text-[#1C1917]`}>Seu pedido</h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className={`${displayFont.className} flex items-center gap-2 text-2xl font-bold tracking-[-0.02em] text-[#1C1917]`}>
+          <ShoppingCart aria-hidden className="h-5 w-5 text-[#B91C1C]" />
+          Seu pedido
+        </h2>
+        {items.length > 0 ? (
+          <span className="rounded-full bg-[#FDECEC] px-2.5 py-1 text-xs font-semibold text-[#991B1B]">
+            {count} {count === 1 ? "item" : "itens"}
+          </span>
+        ) : null}
+      </div>
 
       {items.length === 0 ? (
         <div className="py-8 text-center">
@@ -86,9 +97,9 @@ export default function SiteCart({
               <dt>Entrega</dt>
               <dd>{fee > 0 ? money(fee) : "Grátis"}</dd>
             </div>
-            <div className="flex justify-between pt-1 text-base font-bold text-[#1C1917]">
-              <dt>Total</dt>
-              <dd>{money(subtotal + fee)}</dd>
+            <div className="flex items-baseline justify-between border-t border-[#E7E5E4] pt-3 font-bold text-[#1C1917]">
+              <dt className="text-base">Total</dt>
+              <dd className="text-xl text-[#B91C1C]">{money(subtotal + fee)}</dd>
             </div>
           </dl>
 
