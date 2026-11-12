@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { resolveTenantFromRequest } from "@/lib/tenant/resolve";
+import { loadLivePromotions } from "@/lib/promotions/server";
+import { bestPromoPrice } from "@/lib/promotions/pricing";
 
 export async function GET(req: NextRequest) {
   try {
@@ -33,6 +35,9 @@ export async function GET(req: NextRequest) {
         { status: 404 }
       );
     }
+
+    // Precos ja com a promocao valendo (o servidor cobra o mesmo valor no pedido).
+    const promos = await loadLivePromotions(storeId, tenant!.id);
 
     {
       const productStores = await prisma.productStore.findMany({
@@ -72,7 +77,9 @@ export async function GET(req: NextRequest) {
           source: "productStore",
           storeId,
           items: productStores.map((row) => {
-            const priceCents = row.price_cents ?? row.product.price_cents;
+            const listPrice = row.price_cents ?? row.product.price_cents;
+            const promo = bestPromoPrice(row.product.id, listPrice, promos);
+            const priceCents = promo.priceCents;
             const stock = Number(row.stock ?? 0);
             const isAvailable = row.available && row.product.available && stock > 0;
 
@@ -93,6 +100,8 @@ export async function GET(req: NextRequest) {
               baseStoreId: row.product.storeId,
               price_cents: priceCents,
               price: priceCents / 100,
+              original_price_cents: promo.promo ? listPrice : null,
+              promo_title: promo.promo?.title ?? null,
               createdAt: row.product.createdAt,
             };
           }),
@@ -126,7 +135,9 @@ export async function GET(req: NextRequest) {
       ok: true,
       source: "legacyProduct",
       storeId,
-      items: products.map((product) => ({
+      items: products.map((product) => {
+        const promo = bestPromoPrice(product.id, product.price_cents, promos);
+        return {
         id: product.id,
         name: product.name,
         description: product.description,
@@ -136,10 +147,13 @@ export async function GET(req: NextRequest) {
         active: product.available,
         available: product.available,
         storeId: product.storeId,
-        price_cents: product.price_cents,
-        price: product.price_cents / 100,
+        price_cents: promo.priceCents,
+        price: promo.priceCents / 100,
+        original_price_cents: promo.promo ? product.price_cents : null,
+        promo_title: promo.promo?.title ?? null,
         createdAt: product.createdAt,
-      })),
+        };
+      }),
     });
   } catch (error) {
     console.error("[api/products][GET]", error);

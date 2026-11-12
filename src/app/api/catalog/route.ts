@@ -8,6 +8,8 @@ import {
 import { loadStoreSettings } from "@/lib/store/settings";
 import { enabledPaymentMethods, getOpenStatus } from "@/lib/store/settings-shared";
 import { resolveTenantFromRequest } from "@/lib/tenant/resolve";
+import { loadLivePromotions } from "@/lib/promotions/server";
+import { bestPromoPrice } from "@/lib/promotions/pricing";
 
 // Catalogo publico de uma loja: a mesma resposta alimenta o app (/m) e o site (/).
 // Tudo vem do banco: loja, marca (tenant), categorias, produtos, destaques e regras.
@@ -20,6 +22,8 @@ type CatalogProduct = {
   category: string;
   customizationType: string;
   price_cents: number;
+  original_price_cents: number | null;
+  promo_title: string | null;
   stock: number;
   featured: boolean;
 };
@@ -73,7 +77,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const [settings, categoryRows, productStores] = await Promise.all([
+    const [settings, categoryRows, productStores, promos] = await Promise.all([
       loadStoreSettings(store.id),
       prisma.category.findMany({
         where: { tenantId: store.tenantId },
@@ -109,19 +113,27 @@ export async function GET(req: NextRequest) {
         },
         orderBy: { product: { name: "asc" } },
       }),
+      loadLivePromotions(store.id, store.tenantId),
     ]);
 
-    let products: CatalogProduct[] = productStores.map((row) => ({
-      id: row.product.id,
-      name: row.product.name,
-      description: row.product.description,
-      image: row.product.image,
-      category: canonicalCategoryKey(row.product.category || "outros"),
-      customizationType: row.product.customizationType,
-      price_cents: row.price_cents ?? row.product.price_cents,
-      stock: row.stock,
-      featured: row.featured,
-    }));
+    let products: CatalogProduct[] = productStores.map((row) => {
+      const listPrice = row.price_cents ?? row.product.price_cents;
+      const promo = bestPromoPrice(row.product.id, listPrice, promos);
+      return {
+        id: row.product.id,
+        name: row.product.name,
+        description: row.product.description,
+        image: row.product.image,
+        category: canonicalCategoryKey(row.product.category || "outros"),
+        customizationType: row.product.customizationType,
+        // Preco ja com a promocao valendo; o original vai junto para aparecer riscado.
+        price_cents: promo.priceCents,
+        original_price_cents: promo.promo ? listPrice : null,
+        promo_title: promo.promo?.title ?? null,
+        stock: row.stock,
+        featured: row.featured,
+      };
+    });
 
     // Lojas antigas, sem nenhum vinculo em product_stores: usa o cadastro legado.
     if (products.length === 0) {
@@ -142,12 +154,18 @@ export async function GET(req: NextRequest) {
           },
         });
 
-        products = legacy.map((p) => ({
-          ...p,
-          category: canonicalCategoryKey(p.category || "outros"),
-          stock: 0,
-          featured: false,
-        }));
+        products = legacy.map((p) => {
+          const promo = bestPromoPrice(p.id, p.price_cents, promos);
+          return {
+            ...p,
+            price_cents: promo.priceCents,
+            original_price_cents: promo.promo ? p.price_cents : null,
+            promo_title: promo.promo?.title ?? null,
+            category: canonicalCategoryKey(p.category || "outros"),
+            stock: 0,
+            featured: false,
+          };
+        });
       }
     }
 

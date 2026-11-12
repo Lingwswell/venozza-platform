@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import PromoBalloons from "@/components/promo/PromoBalloons";
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, Clock3, MapPin, Search, ShoppingBag, Star } from "lucide-react";
 import { addToCart, getCartCountByStore, purgeLegacyCartItems } from "@/lib/cart-storage";
@@ -94,6 +96,7 @@ function groupBeverages(products: CatalogProduct[]): DisplayProduct[] {
 
 export default function MobileAppPage() {
   const { catalog, loading, error, needsStore } = useStoreCatalog();
+  const router = useRouter();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [activeSlide, setActiveSlide] = useState(0);
   const [cartCount, setCartCount] = useState(0);
@@ -191,6 +194,9 @@ export default function MobileAppPage() {
 
         <div className="flex items-center justify-between gap-2 p-3 pt-2">
           <span className="text-[15px] font-black text-[#ff1010]">
+            {product.original_price_cents && !product.beverageGroup ? (
+              <s className="mr-1 block text-[10px] font-bold text-[#8a817d]">{formatMoneyFromCents(product.original_price_cents)}</s>
+            ) : null}
             {product.beverageGroup ? <span className="text-[10px] font-bold text-[#8a817d]">a partir de </span> : null}
             {formatMoneyFromCents(product.price_cents)}
           </span>
@@ -463,6 +469,12 @@ export default function MobileAppPage() {
           </>
         )}
       </div>
+
+      <PromoBalloons
+        storeId={catalog?.store.id || ""}
+        variant="app"
+        onOpenProduct={(productId) => router.push(`/m/produto/${productId}`)}
+      />
 
       <AppBottomNav />
 

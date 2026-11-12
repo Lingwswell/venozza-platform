@@ -18,7 +18,11 @@ export type CatalogProduct = {
   image: string | null;
   category: string;
   customizationType: string;
+  /** Preco ja com promocao (se houver). */
   price_cents: number;
+  /** Preco sem promocao, quando ha promocao valendo (para mostrar riscado). */
+  original_price_cents?: number | null;
+  promo_title?: string | null;
   stock: number;
   featured: boolean;
 };

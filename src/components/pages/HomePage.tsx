@@ -1,5 +1,6 @@
 "use client";
 
+import PromoBalloons from "@/components/promo/PromoBalloons";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowDown, Banknote, Bike, Check, Clock3, MapPin, MessageCircle, Plus, Search, ShoppingBag, ShoppingCart } from "lucide-react";
@@ -400,6 +401,9 @@ export function HomePage() {
                               <span className="text-lg font-semibold">{product.name}</span>
                               <span aria-hidden className="mb-1.5 flex-1 border-b border-dotted border-[#D6D0C8]" />
                               <span className="whitespace-nowrap text-lg font-semibold text-[#B91C1C]">
+                                {product.original_price_cents ? (
+                                  <s className="mr-2 text-[15px] font-medium text-[#8A8580]">{money(product.original_price_cents)}</s>
+                                ) : null}
                                 {choose && detectProductKind(product) === "pizza" ? "a partir de " : ""}
                                 {money(product.price_cents)}
                               </span>
@@ -467,6 +471,16 @@ export function HomePage() {
           </button>
         </div>
       ) : null}
+
+      <PromoBalloons
+        storeId={storeId}
+        variant="site"
+        onOpenProduct={(productId) => {
+          const product = catalog?.products.find((p) => p.id === productId);
+          if (product) openOrAdd(product);
+          else showToast("Esse produto não está disponível agora");
+        }}
+      />
 
       <ProductDialog product={openProduct} onClose={() => setOpenProduct(null)} onAdded={(name) => showToast(`${name} adicionado ao pedido`)} />
       <HalfHalfDialog

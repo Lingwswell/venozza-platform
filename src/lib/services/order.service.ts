@@ -16,6 +16,8 @@ import {
   getOpenStatus,
 } from "@/lib/store/settings-shared";
 import { formatMoneyFromCents } from "@/lib/utils/formatters";
+import { loadLivePromotions } from "@/lib/promotions/server";
+import { bestPromoPrice, type PromotionRule } from "@/lib/promotions/pricing";
 import type {
   CreateOrderInput,
   CreateOrderItemInput,
@@ -187,7 +189,8 @@ function findExactOption<T extends { name: string }>(
 async function loadHalfHalfFlavor(
   flavorId: string,
   storeId: string,
-  qty: number
+  qty: number,
+  promos: PromotionRule[] = []
 ): Promise<{ name: string; priceCents: number }> {
   const productStore = await prisma.productStore.findUnique({
     where: {
@@ -240,7 +243,8 @@ async function loadHalfHalfFlavor(
     throw new AppError("Preço do sabor inválido para esta loja.", 400);
   }
 
-  return { name, priceCents };
+  // Sabor em promocao entra no meio a meio com o preco promocional.
+  return { name, priceCents: bestPromoPrice(flavorId, priceCents, promos).priceCents };
 }
 
 async function priceHalfHalfItem(
@@ -248,7 +252,8 @@ async function priceHalfHalfItem(
   productId: string,
   qty: number,
   storeId: string,
-  catalog: OptionCatalog
+  catalog: OptionCatalog,
+  promos: PromotionRule[] = []
 ): Promise<CreateOrderItemInput> {
   const flavorIds = productId
     .slice(HALF_HALF_PREFIX.length)
@@ -263,7 +268,7 @@ async function priceHalfHalfItem(
   const flavors: Array<{ name: string; priceCents: number }> = [];
 
   for (const flavorId of flavorIds) {
-    flavors.push(await loadHalfHalfFlavor(flavorId, storeId, qty));
+    flavors.push(await loadHalfHalfFlavor(flavorId, storeId, qty, promos));
   }
 
   const addons = Array.isArray(item.addons) ? item.addons : [];
@@ -337,6 +342,8 @@ async function normalizeItemsWithDBPrice(
 ): Promise<CreateOrderItemInput[]> {
   const normalizedItems: CreateOrderItemInput[] = [];
   const catalog = await loadOptionCatalog(storeId);
+  // Promocoes de desconto valendo agora nesta loja (Marketing do admin).
+  const promos = await loadLivePromotions(storeId);
 
   for (const item of items) {
     const qty =
@@ -357,7 +364,7 @@ async function normalizeItemsWithDBPrice(
 
     if (productId.startsWith(HALF_HALF_PREFIX)) {
       normalizedItems.push(
-        await priceHalfHalfItem(item, productId, qty, storeId, catalog)
+        await priceHalfHalfItem(item, productId, qty, storeId, catalog, promos)
       );
       continue;
     }
@@ -423,13 +430,17 @@ async function normalizeItemsWithDBPrice(
         catalog
       );
 
-      const priceCents = Math.max(0, basePriceCents + customizationDeltaCents);
+      const promo = bestPromoPrice(productId, basePriceCents, promos);
+      const priceCents = Math.max(0, promo.priceCents + customizationDeltaCents);
 
       normalizedItems.push({
         ...item,
         name: productName,
         quantity: qty,
         price_cents: priceCents,
+        ...(promo.promo
+          ? { addons: [...(Array.isArray(item.addons) ? item.addons : []), `Promoção: ${promo.promo.title}`] }
+          : {}),
       });
 
       continue;
@@ -462,11 +473,13 @@ async function normalizeItemsWithDBPrice(
       catalog
     );
 
+    const legacyPromo = bestPromoPrice(productId, legacyProduct.price_cents, promos);
+
     normalizedItems.push({
       ...item,
       name: legacyProduct.name || item.name,
       quantity: qty,
-      price_cents: legacyProduct.price_cents + customizationDeltaCents,
+      price_cents: legacyPromo.priceCents + customizationDeltaCents,
     });
   }
 
