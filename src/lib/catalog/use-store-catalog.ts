@@ -83,8 +83,9 @@ export function formatDeliveryWindow(settings: CatalogStoreSettings) {
 export function pickFeatured(products: CatalogProduct[], limit = 4) {
   const marked = products.filter((p) => p.featured);
   if (marked.length > 0) return marked.slice(0, limit);
-  const withImage = products.filter((p) => p.image);
-  return (withImage.length > 0 ? withImage : products).slice(0, Math.min(limit, 3));
+  // Sem destaque marcado no admin: pizzas primeiro (com foto antes), depois o resto.
+  const score = (p: CatalogProduct) => (p.category === "pizza" ? 0 : 2) + (p.image ? 0 : 1);
+  return [...products].sort((a, b) => score(a) - score(b)).slice(0, Math.min(limit, 3));
 }
 
 export function useStoreCatalog() {

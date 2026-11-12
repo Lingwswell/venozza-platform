@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Home, Menu, ShoppingCart, User, ClipboardList } from "lucide-react";
-import { getCartCountByStore } from "@/lib/cart-storage";
+import { CART_CHANGED_EVENT, getCartCountByStore } from "@/lib/cart-storage";
 import { getMobileStoreContext } from "@/lib/mobile-store-context";
 
 function navItemClass(active: boolean) {
@@ -31,10 +31,12 @@ export default function AppBottomNav() {
     reload();
     window.addEventListener("focus", reload);
     window.addEventListener("storage", reload);
+    window.addEventListener(CART_CHANGED_EVENT, reload);
 
     return () => {
       window.removeEventListener("focus", reload);
       window.removeEventListener("storage", reload);
+      window.removeEventListener(CART_CHANGED_EVENT, reload);
     };
   }, []);
 

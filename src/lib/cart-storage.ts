@@ -14,9 +14,13 @@ function readCart(): CartItem[] {
   }
 }
 
+export const CART_CHANGED_EVENT = "venozza:cart-changed";
+
 function writeCart(items: CartItem[]) {
   if (typeof window === "undefined") return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  // Avisa telas abertas (carrinho lateral do site, contador do app).
+  window.dispatchEvent(new Event(CART_CHANGED_EVENT));
 }
 
 function normalizeItem(item: CartItem): CartItem {
@@ -133,6 +137,31 @@ export function removeCartItem(id: string | number) {
 export function clearCart() {
   if (typeof window === "undefined") return;
   localStorage.removeItem(STORAGE_KEY);
+  window.dispatchEvent(new Event(CART_CHANGED_EVENT));
+}
+
+/** Identidade de uma linha do carrinho (mesmo produto com tamanho/borda diferente = outra linha). */
+export function cartLineKey(item: CartItem) {
+  return [
+    String(item.id),
+    item.name,
+    item.storeId || "",
+    item.size || "",
+    item.crust || "",
+    JSON.stringify(item.addons || []),
+    item.note || "",
+  ].join("|");
+}
+
+/** Soma (ou subtrai) quantidade de uma linha especifica; zero remove a linha. */
+export function changeCartLineQuantity(line: CartItem, delta: number) {
+  const key = cartLineKey(normalizeItem(line));
+  const items = getCartItems()
+    .map((item) =>
+      cartLineKey(item) === key ? { ...item, quantity: item.quantity + delta } : item
+    )
+    .filter((item) => item.quantity > 0);
+  writeCart(items);
 }
 
 export function clearCartByStore(storeId: string) {

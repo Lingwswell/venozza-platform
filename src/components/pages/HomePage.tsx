@@ -2,46 +2,71 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Clock3, MapPin, MessageCircle, Search, ShoppingBag, Wallet } from "lucide-react";
-import { addToCart, getCartCountByStore, purgeLegacyCartItems } from "@/lib/cart-storage";
+import { MapPin, MessageCircle, Plus, Search, ShoppingBag } from "lucide-react";
+import {
+  CART_CHANGED_EVENT,
+  addToCart,
+  getCartItemsByStore,
+  purgeLegacyCartItems,
+} from "@/lib/cart-storage";
 import { ensureMobileStoreContext } from "@/lib/mobile-store-context";
-import StorePicker from "@/components/store/StorePicker";
 import { normalizeText } from "@/lib/catalog/category";
 import {
   formatDeliveryWindow,
   pickFeatured,
-  handleProductImageError,
   productImage,
   useStoreCatalog,
   type CatalogProduct,
 } from "@/lib/catalog/use-store-catalog";
+import type { CartItem } from "@/types/order";
+import StorePicker from "@/components/store/StorePicker";
+import Plate from "@/components/site/Plate";
+import SiteCart from "@/components/site/SiteCart";
+import { displayFont } from "@/lib/fonts";
 
-// Site (versao desktop). Mesma fonte de dados do app: /api/catalog.
-// Nenhum produto, preco, promocao ou nota fica escrito aqui.
+// Site da loja (computador). Mesma fonte de dados do app: /api/catalog.
+// Tudo que aparece (marca, loja, cardapio, precos, regras) vem do banco.
 
 function money(cents: number) {
   return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-// Pizzas abrem a pagina do produto para escolher tamanho/borda; o resto vai direto ao carrinho.
+// Pizza (e produto montavel) abre a tela de escolha; o resto vai direto ao carrinho.
 function needsChoice(product: CatalogProduct) {
   return product.category === "pizza" || product.customizationType !== "auto";
 }
+
+const focusRing =
+  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C8171E]";
 
 export function HomePage() {
   const { catalog, loading, error, needsStore } = useStoreCatalog();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [cartCount, setCartCount] = useState(0);
-  const [addedId, setAddedId] = useState<string | null>(null);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [activeCat, setActiveCat] = useState("");
+  const [justAdded, setJustAdded] = useState<string | null>(null);
+
+  const storeId = catalog?.store.id || "";
 
   useEffect(() => {
     purgeLegacyCartItems();
   }, []);
 
+  // Carrinho da loja atual, atualizado quando qualquer tela mexe nele.
   useEffect(() => {
-    if (catalog) setCartCount(getCartCountByStore(catalog.store.id));
-  }, [catalog]);
+    if (!storeId) return;
+    const reload = () => setCartItems(getCartItemsByStore(storeId));
+    reload();
+    window.addEventListener(CART_CHANGED_EVENT, reload);
+    window.addEventListener("storage", reload);
+    window.addEventListener("focus", reload);
+    return () => {
+      window.removeEventListener(CART_CHANGED_EVENT, reload);
+      window.removeEventListener("storage", reload);
+      window.removeEventListener("focus", reload);
+    };
+  }, [storeId]);
 
   const categories = useMemo(
     () => (catalog?.categories || []).filter((c) => c.showInSite),
@@ -58,10 +83,24 @@ export function HomePage() {
     );
   }, [catalog, categories, search]);
 
-  const featured = useMemo(
-    () => pickFeatured(products.length ? products : catalog?.products || [], 4),
-    [products, catalog]
-  );
+  const featured = useMemo(() => pickFeatured(catalog?.products || [], 3), [catalog]);
+
+  // Destaca no menu de categorias a secao que esta na tela.
+  useEffect(() => {
+    if (categories.length === 0) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((e) => e.isIntersecting);
+        if (visible[0]) setActiveCat(visible[0].target.id.replace("cat-", ""));
+      },
+      { rootMargin: "-140px 0px -60% 0px" }
+    );
+    for (const c of categories) {
+      const el = document.getElementById(`cat-${c.key}`);
+      if (el) observer.observe(el);
+    }
+    return () => observer.disconnect();
+  }, [categories, search]);
 
   function handleAdd(product: CatalogProduct) {
     const store = ensureMobileStoreContext();
@@ -74,286 +113,303 @@ export function HomePage() {
       tenantId: store.tenantId,
       storeId: store.storeId,
     });
-    setCartCount(getCartCountByStore(store.storeId));
-    setAddedId(product.id);
-    setTimeout(() => setAddedId((current) => (current === product.id ? null : current)), 1500);
+    setJustAdded(product.id);
+    setTimeout(() => setJustAdded((c) => (c === product.id ? null : c)), 1400);
   }
 
   const brand = catalog?.store.brandName || "";
   const settings = catalog?.settings;
-  const whatsappHref = settings?.whatsapp ? `https://wa.me/55${settings.whatsapp.replace(/^55/, "")}` : null;
+  const cartCount = cartItems.reduce((s, i) => s + i.quantity, 0);
+  const whatsappHref = settings?.whatsapp
+    ? `https://wa.me/55${settings.whatsapp.replace(/^55/, "")}`
+    : null;
 
   return (
-    <main className="min-h-screen bg-[#fff8f2] text-[#1f1b16]">
-      <header className="sticky top-0 z-50 border-b border-[#eee2d5] bg-[#fff8f2]/95 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 md:px-8">
-          <div className="min-w-0">
-            <Link href="/" className="block truncate text-2xl font-black tracking-tight text-[#b3261e]">
-              {brand || " "}
-            </Link>
-            <button
-              type="button"
-              onClick={() => setPickerOpen(true)}
-              className="flex items-center gap-1 truncate text-xs text-[#6e6257] hover:text-[#b3261e] md:text-sm"
-            >
-              <MapPin className="h-3.5 w-3.5 text-[#b3261e]" />
-              {catalog
-                ? `${catalog.store.name}${catalog.store.city ? ` · ${catalog.store.city}` : ""}`
-                : "Escolha a loja"}
-              <span className="font-semibold underline">trocar</span>
-            </button>
-          </div>
-
-          <label className="hidden flex-1 justify-center md:flex">
-            <span className="flex w-full max-w-xl items-center gap-3 rounded-full border border-[#eadbcc] bg-white px-4 py-3 shadow-sm">
-              <Search className="h-4 w-4 text-[#b3261e]" />
-              <input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar no cardápio"
-                className="w-full border-0 bg-transparent p-0 text-sm outline-none placeholder:text-[#9b8f84]"
-              />
-            </span>
-          </label>
-
-          <Link
-            href="/m/carrinho"
-            className="relative flex items-center gap-2 rounded-full bg-[#1f1b16] px-5 py-2.5 text-sm font-bold text-white transition hover:opacity-90"
-          >
-            <ShoppingBag className="h-4 w-4" />
-            Carrinho
-            {cartCount > 0 ? (
-              <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[#e3342a] px-1 text-[11px] font-black">
-                {cartCount}
-              </span>
-            ) : null}
+    <main className="min-h-screen bg-[#FCFBF9] text-[#1F1A17]">
+      {/* Barra do topo */}
+      <header className="sticky top-0 z-40 border-b border-[#ECE6DF] bg-[#FCFBF9]/95 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center gap-4 px-5 py-3">
+          <Link href="/" className={`${displayFont.className} ${focusRing} shrink-0 rounded text-xl font-extrabold text-[#C8171E]`}>
+            {brand || " "}
           </Link>
-        </div>
 
-        <div className="border-t border-[#f0e5da] px-4 py-3 md:hidden">
-          <label className="mx-auto flex max-w-7xl items-center gap-3 rounded-full border border-[#eadbcc] bg-white px-4 py-3 shadow-sm">
-            <Search className="h-4 w-4 text-[#b3261e]" />
+          <label className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-[#ECE6DF] bg-white px-4 py-2.5 focus-within:border-[#C8171E]">
+            <Search className="h-4 w-4 shrink-0 text-[#857A71]" />
+            <span className="sr-only">Buscar no cardápio</span>
             <input
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar no cardápio"
-              className="w-full border-0 bg-transparent p-0 text-sm outline-none placeholder:text-[#9b8f84]"
+              placeholder="Buscar pizza, bebida, sobremesa"
+              className="w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-[#A79C93]"
             />
           </label>
+
+          <Link
+            href="/m/carrinho"
+            className={`${focusRing} relative flex shrink-0 items-center gap-2 rounded-full bg-[#1F1A17] px-4 py-2.5 text-sm font-semibold text-white lg:hidden`}
+          >
+            <ShoppingBag className="h-4 w-4" />
+            {cartCount > 0 ? cartCount : null}
+          </Link>
         </div>
 
         {categories.length > 1 && !search ? (
-          <nav className="mx-auto flex max-w-7xl gap-2 overflow-x-auto px-4 pb-3 md:px-8 [scrollbar-width:none]">
-            {categories.map((cat) => (
-              <a
-                key={cat.key}
-                href={`#cat-${cat.key}`}
-                className="shrink-0 rounded-full border border-[#eadbcc] bg-white px-4 py-2 text-sm font-semibold text-[#3d342c] transition hover:border-[#b3261e] hover:text-[#b3261e]"
-              >
-                {cat.icon} {cat.label}
-              </a>
-            ))}
+          <nav aria-label="Categorias do cardápio" className="mx-auto max-w-6xl px-5">
+            <ul className="-mb-px flex gap-6 overflow-x-auto [scrollbar-width:none]">
+              {categories.map((cat) => (
+                <li key={cat.key}>
+                  <a
+                    href={`#cat-${cat.key}`}
+                    className={[
+                      focusRing,
+                      "block whitespace-nowrap border-b-2 py-2.5 text-sm font-semibold transition-colors",
+                      activeCat === cat.key
+                        ? "border-[#C8171E] text-[#1F1A17]"
+                        : "border-transparent text-[#857A71] hover:text-[#1F1A17]",
+                    ].join(" ")}
+                  >
+                    {cat.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
           </nav>
         ) : null}
       </header>
 
-      <div className="mx-auto max-w-7xl px-4 pb-28 pt-6 md:px-8">
-        {catalog && !catalog.status.open ? (
-          <div className="mb-6 rounded-3xl border border-[#ffd2cc] bg-[#fff1ef] px-6 py-4 text-base font-bold text-[#b3261e]">
-            {catalog.status.message}
-          </div>
-        ) : null}
+      {/* Abertura: marca, loja, regras de entrega e os pratos em destaque */}
+      {catalog && !search ? (
+        <section className="mx-auto grid max-w-6xl items-center gap-10 px-5 pb-8 pt-10 lg:grid-cols-[1.05fr_1fr] lg:pt-14">
+          <div>
+            <button
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              className={`${focusRing} inline-flex items-center gap-2 rounded-full border border-[#ECE6DF] bg-white px-3.5 py-1.5 text-sm text-[#4A423C] hover:border-[#C8171E]`}
+            >
+              <MapPin className="h-4 w-4 text-[#C8171E]" />
+              {catalog.store.name}
+              <span className="font-semibold text-[#C8171E]">Trocar</span>
+            </button>
 
-        {settings ? (
-          <section className="mb-8 flex flex-wrap gap-3 text-sm font-semibold text-[#5f5348]">
-            <span className="flex items-center gap-2 rounded-full bg-white px-4 py-2 shadow-sm">
-              <Clock3 className="h-4 w-4 text-[#b3261e]" />
-              Entrega em {formatDeliveryWindow(settings)}
-            </span>
-            <span className="rounded-full bg-white px-4 py-2 shadow-sm">
-              Taxa de entrega: {settings.deliveryFeeCents > 0 ? money(settings.deliveryFeeCents) : "grátis"}
-              {settings.freeDeliveryAboveCents ? ` · grátis acima de ${money(settings.freeDeliveryAboveCents)}` : ""}
-            </span>
-            {settings.minimumOrderCents > 0 ? (
-              <span className="rounded-full bg-white px-4 py-2 shadow-sm">
-                Pedido mínimo: {money(settings.minimumOrderCents)}
+            <h1
+              className={`${displayFont.className} mt-5 text-[clamp(3rem,7vw,5.5rem)] font-extrabold leading-[0.92] tracking-[-0.035em] text-[#1F1A17]`}
+            >
+              {brand}
+            </h1>
+
+            <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-[15px] text-[#4A423C]">
+              <span className="inline-flex items-center gap-2 font-semibold">
+                <span
+                  aria-hidden
+                  className={`h-2.5 w-2.5 rounded-full ${catalog.status.open ? "bg-[#2E7D4F]" : "bg-[#C8171E]"}`}
+                />
+                <span className={catalog.status.open ? "text-[#2E7D4F]" : "text-[#A3141A]"}>
+                  {catalog.status.open ? "Aberta agora" : catalog.status.message}
+                </span>
               </span>
-            ) : null}
-            {catalog?.paymentMethods.length ? (
-              <span className="flex items-center gap-2 rounded-full bg-white px-4 py-2 shadow-sm">
-                <Wallet className="h-4 w-4 text-[#b3261e]" />
-                {catalog.paymentMethods.map((m) => m.label).join(" · ")}
+              <span>Entrega em {formatDeliveryWindow(catalog.settings)}</span>
+              <span>
+                {catalog.settings.deliveryFeeCents > 0
+                  ? `Taxa ${money(catalog.settings.deliveryFeeCents)}`
+                  : "Entrega grátis"}
+                {catalog.settings.freeDeliveryAboveCents
+                  ? `, grátis acima de ${money(catalog.settings.freeDeliveryAboveCents)}`
+                  : ""}
               </span>
+              {catalog.settings.minimumOrderCents > 0 ? (
+                <span>Pedido mínimo {money(catalog.settings.minimumOrderCents)}</span>
+              ) : null}
+            </div>
+
+            {catalog.paymentMethods.length > 0 ? (
+              <p className="mt-3 text-sm text-[#857A71]">
+                Pague na entrega com {catalog.paymentMethods.map((m) => m.label).join(", ")}.
+              </p>
             ) : null}
+
             {whatsappHref ? (
               <a
                 href={whatsappHref}
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-2 rounded-full bg-white px-4 py-2 shadow-sm hover:text-[#b3261e]"
+                className={`${focusRing} mt-5 inline-flex items-center gap-2 rounded-full text-sm font-semibold text-[#2E7D4F] hover:underline`}
               >
-                <MessageCircle className="h-4 w-4 text-[#1f9d55]" />
-                WhatsApp
+                <MessageCircle className="h-4 w-4" />
+                Falar com a loja no WhatsApp
               </a>
             ) : null}
-          </section>
-        ) : null}
+          </div>
 
-        {needsStore ? null : loading ? (
-          <p className="rounded-3xl bg-white p-6 text-sm font-semibold text-[#6e6257] shadow-sm">Carregando cardápio...</p>
-        ) : error ? (
-          <p className="rounded-3xl border border-red-200 bg-red-50 p-6 text-sm font-semibold text-red-700">{error}</p>
-        ) : (
-          <>
-            {featured.length > 0 && !search ? (
-              <section className="mb-12">
-                <h2 className="mb-4 text-2xl font-black tracking-tight">Destaques</h2>
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                  {featured.map((product, index) => (
-                    <Link
-                      key={product.id}
-                      href={`/m/produto/${product.id}`}
+          {featured.length > 0 ? (
+            <div className="relative mx-auto flex h-[340px] w-full max-w-[460px] items-center justify-center">
+              {featured.map((product, index) => {
+                // Pratos sobrepostos: o principal grande no centro, os outros menores ao lado.
+                const layout = [
+                  { size: 250, style: { left: "50%", top: "46%", transform: "translate(-50%,-50%)", zIndex: 3 } },
+                  { size: 150, style: { left: "2%", top: "62%", zIndex: 2 } },
+                  { size: 140, style: { right: "0%", top: "4%", zIndex: 1 } },
+                ][index];
+                return (
+                  <Link
+                    key={product.id}
+                    href={`/m/produto/${product.id}`}
+                    className={`${focusRing} group absolute rounded-full ${index > 0 ? "hidden sm:block" : ""}`}
+                    style={layout.style}
+                    aria-label={`${product.name}, ${money(product.price_cents)}`}
+                  >
+                    <Plate
+                      src={product.image}
+                      name={product.name}
+                      size={layout.size}
+                      className="shadow-[0_18px_40px_rgba(70,40,20,0.22)] transition-transform group-hover:scale-[1.03]"
+                    />
+                    <span
                       className={[
-                        "group relative overflow-hidden rounded-[28px] bg-[#1f1b16] text-white shadow-[0_18px_45px_rgba(31,27,22,0.18)]",
-                        index === 0 ? "md:col-span-2 md:row-span-2" : "",
+                        "absolute left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#1F1A17] shadow-sm",
+                        index === 0 ? "-bottom-3" : "-bottom-2",
                       ].join(" ")}
                     >
-                      <img
-                        src={productImage(product)}
-                        onError={handleProductImageError}
-                        alt={product.name}
-                        className={[
-                          "w-full object-cover opacity-90 transition group-hover:scale-[1.03]",
-                          index === 0 ? "h-64 md:h-full md:min-h-[340px]" : "h-44",
-                        ].join(" ")}
-                      />
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-5">
-                        <p className={index === 0 ? "text-2xl font-black" : "text-lg font-black"}>{product.name}</p>
-                        <p className="mt-1 text-sm font-bold text-[#ffd2a8]">{money(product.price_cents)}</p>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </section>
-            ) : null}
+                      {product.name} <span className="text-[#C8171E]">{money(product.price_cents)}</span>
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
-            {search ? (
-              <p className="mb-6 text-sm font-semibold text-[#6e6257]">
-                {products.length} resultado{products.length === 1 ? "" : "s"} para “{search}”
-              </p>
-            ) : null}
+      {/* Cardapio + carrinho */}
+      <div className="mx-auto grid max-w-6xl gap-10 px-5 pb-28 pt-4 lg:grid-cols-[1fr_340px]">
+        <div>
+          {needsStore ? null : loading ? (
+            <p className="py-10 text-[#857A71]">Carregando o cardápio...</p>
+          ) : error ? (
+            <p className="rounded-2xl bg-[#FDEDEC] p-5 text-sm font-medium text-[#A3141A]">{error}</p>
+          ) : search && products.length === 0 ? (
+            <p className="py-10 text-[#857A71]">Nada encontrado para “{search}”. Tente outro nome.</p>
+          ) : categories.length === 0 ? (
+            <p className="py-10 text-[#857A71]">Esta loja ainda não tem produtos à venda.</p>
+          ) : (
+            categories.map((cat) => {
+              const items = products.filter((p) => p.category === cat.key);
+              if (items.length === 0) return null;
 
-            {categories.length === 0 ? (
-              <p className="rounded-3xl bg-white p-6 text-sm font-semibold text-[#6e6257] shadow-sm">
-                Nenhum produto disponível nesta loja no momento.
-              </p>
-            ) : (
-              categories.map((cat) => {
-                const items = products.filter((p) => p.category === cat.key);
-                if (items.length === 0) return null;
+              return (
+                <section key={cat.key} id={`cat-${cat.key}`} className="scroll-mt-32 pt-6">
+                  <h2 className={`${displayFont.className} text-[28px] font-bold tracking-[-0.02em]`}>
+                    {cat.label}
+                  </h2>
 
-                return (
-                  <section key={cat.key} id={`cat-${cat.key}`} className="mb-12 scroll-mt-40">
-                    <h2 className="mb-4 text-2xl font-black tracking-tight">
-                      {cat.icon} {cat.label}
-                    </h2>
-
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                      {cat.key === "pizza" && !search ? (
+                  <ul className="mt-2 divide-y divide-[#ECE6DF]">
+                    {cat.key === "pizza" && !search ? (
+                      <li className="flex items-center gap-5 py-5">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[17px] font-semibold">Pizza meio a meio</p>
+                          <p className="mt-1 text-sm text-[#6B625B]">Dois sabores na mesma pizza. Você escolhe as metades.</p>
+                        </div>
                         <Link
                           href="/m/meio-a-meio"
-                          className="flex flex-col justify-between rounded-[24px] border border-dashed border-[#e7b9a6] bg-[#fff1ea] p-5 transition hover:border-[#b3261e]"
+                          className={`${focusRing} shrink-0 rounded-full border border-[#C8171E] px-4 py-2 text-sm font-semibold text-[#C8171E] hover:bg-[#C8171E] hover:text-white`}
                         >
-                          <span className="text-4xl">🍕</span>
-                          <div>
-                            <h3 className="mt-4 text-lg font-black">Pizza meio a meio</h3>
-                            <p className="mt-1 text-sm text-[#6e6257]">Monte sua pizza com 2 sabores.</p>
-                            <span className="mt-4 inline-block rounded-full bg-[#b3261e] px-4 py-2 text-sm font-bold text-white">
-                              Montar
-                            </span>
-                          </div>
+                          Montar
                         </Link>
-                      ) : null}
+                      </li>
+                    ) : null}
 
-                      {items.map((product) => (
-                        <article
-                          key={product.id}
-                          className="flex flex-col overflow-hidden rounded-[24px] border border-[#efe2d6] bg-white shadow-sm transition hover:shadow-md"
-                        >
-                          <Link href={`/m/produto/${product.id}`}>
-                            <img
-                              src={productImage(product)}
-                              onError={handleProductImageError}
-                              alt={product.name}
-                              className="h-44 w-full bg-[#fff4ef] object-cover"
-                            />
-                          </Link>
-                          <div className="flex flex-1 flex-col p-4">
-                            <h3 className="text-base font-black leading-tight">{product.name}</h3>
-                            {product.description ? (
-                              <p className="mt-1 line-clamp-2 text-sm text-[#6e6257]">{product.description}</p>
-                            ) : null}
-                            <div className="mt-auto flex items-center justify-between gap-3 pt-4">
-                              <span className="text-lg font-black text-[#b3261e]">{money(product.price_cents)}</span>
-                              {needsChoice(product) ? (
-                                <Link
-                                  href={`/m/produto/${product.id}`}
-                                  className="rounded-full bg-[#b3261e] px-4 py-2 text-sm font-bold text-white transition hover:opacity-90"
-                                >
-                                  Escolher
-                                </Link>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => handleAdd(product)}
-                                  className="rounded-full bg-[#b3261e] px-4 py-2 text-sm font-bold text-white transition hover:opacity-90"
-                                >
-                                  {addedId === product.id ? "Adicionado ✓" : "Adicionar"}
-                                </button>
-                              )}
+                    {items.map((product) => {
+                      const choose = needsChoice(product);
+                      return (
+                        <li key={product.id} className="flex items-center gap-5 py-5">
+                          <Link href={`/m/produto/${product.id}`} className={`${focusRing} min-w-0 flex-1 rounded-lg`}>
+                            <div className="flex items-baseline gap-3">
+                              <span className="text-[17px] font-semibold">{product.name}</span>
+                              <span aria-hidden className="mb-1 flex-1 border-b border-dotted border-[#D4C9BE]" />
+                              <span className="whitespace-nowrap text-[17px] font-semibold text-[#C8171E]">
+                                {choose && product.category === "pizza" ? "a partir de " : ""}
+                                {money(product.price_cents)}
+                              </span>
                             </div>
+                            {product.description ? (
+                              <p className="mt-1 max-w-[60ch] text-sm leading-relaxed text-[#6B625B]">
+                                {product.description}
+                              </p>
+                            ) : null}
+                          </Link>
+
+                          <div className="relative shrink-0">
+                            <Plate src={product.image} name={product.name} size={88} />
+                            {choose ? (
+                              <Link
+                                href={`/m/produto/${product.id}`}
+                                aria-label={`Escolher tamanho e borda de ${product.name}`}
+                                className={`${focusRing} absolute -bottom-1 -right-1 grid h-9 w-9 place-items-center rounded-full bg-[#C8171E] text-white shadow-md hover:bg-[#A9121A]`}
+                              >
+                                <Plus className="h-4 w-4" />
+                              </Link>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleAdd(product)}
+                                aria-label={`Adicionar ${product.name} ao carrinho`}
+                                className={[
+                                  focusRing,
+                                  "absolute -bottom-1 -right-1 grid h-9 w-9 place-items-center rounded-full text-white shadow-md transition-colors",
+                                  justAdded === product.id ? "bg-[#2E7D4F]" : "bg-[#C8171E] hover:bg-[#A9121A]",
+                                ].join(" ")}
+                              >
+                                {justAdded === product.id ? <span className="text-sm font-bold">✓</span> : <Plus className="h-4 w-4" />}
+                              </button>
+                            )}
                           </div>
-                        </article>
-                      ))}
-                    </div>
-                  </section>
-                );
-              })
-            )}
-          </>
-        )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              );
+            })
+          )}
+        </div>
+
+        <aside className="hidden lg:block">
+          <div className="sticky top-32">
+            <SiteCart items={cartItems} catalog={catalog} />
+          </div>
+        </aside>
       </div>
 
-      <footer className="border-t border-[#eee2d5] bg-[#fff3e9]">
-        <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-8 text-sm text-[#6e6257] md:flex-row md:items-center md:justify-between md:px-8">
+      <footer className="border-t border-[#ECE6DF]">
+        <div className="mx-auto flex max-w-6xl flex-col gap-2 px-5 py-8 text-sm text-[#857A71] sm:flex-row sm:justify-between">
           <span>
-            © {new Date().getFullYear()} {brand}
+            {brand} {catalog ? `— ${catalog.store.name}` : ""}
           </span>
-          <div className="flex gap-4">
-            <Link href="/m" className="hover:text-[#b3261e]">Abrir no celular</Link>
-            <Link href="/admin/login" className="hover:text-[#b3261e]">Área do lojista</Link>
+          <div className="flex gap-5">
+            <Link href="/m" className={`${focusRing} rounded hover:text-[#1F1A17]`}>Abrir no celular</Link>
+            <Link href="/admin/login" className={`${focusRing} rounded hover:text-[#1F1A17]`}>Área do lojista</Link>
           </div>
         </div>
       </footer>
+
+      {/* Celular/tablet: barra do carrinho */}
+      {cartCount > 0 ? (
+        <div className="fixed inset-x-0 bottom-4 z-40 px-5 lg:hidden">
+          <Link
+            href="/m/carrinho"
+            className={`${focusRing} mx-auto flex max-w-md items-center justify-between rounded-full bg-[#C8171E] px-6 py-4 text-sm font-bold text-white shadow-[0_16px_40px_rgba(200,23,30,0.35)]`}
+          >
+            <span>Ver carrinho ({cartCount})</span>
+            <span>{money(cartItems.reduce((s, i) => s + Number(i.price_cents || 0) * i.quantity, 0))}</span>
+          </Link>
+        </div>
+      ) : null}
 
       {needsStore ? (
         <StorePicker open automatic />
       ) : (
         <StorePicker open={pickerOpen} onClose={() => setPickerOpen(false)} />
       )}
-
-      {cartCount > 0 ? (
-        <div className="fixed bottom-4 left-0 right-0 z-50 px-4 md:hidden">
-          <Link
-            href="/m/carrinho"
-            className="flex items-center justify-center rounded-full bg-[#b3261e] px-6 py-4 text-sm font-black text-white shadow-[0_20px_50px_rgba(179,38,30,0.35)]"
-          >
-            Ver carrinho ({cartCount})
-          </Link>
-        </div>
-      ) : null}
     </main>
   );
 }
