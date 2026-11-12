@@ -38,6 +38,7 @@ export default function Plate({
   size,
   ring = 4,
   shadow,
+  spin = false,
   className = "",
 }: {
   src: string | null;
@@ -46,6 +47,8 @@ export default function Plate({
   ring?: number;
   /** Sombra extra (CSS box-shadow), somada ao aro branco. */
   shadow?: string;
+  /** Gira a foto devagar (abertura do site). Respeita "reduzir movimento". */
+  spin?: boolean;
   className?: string;
 }) {
   const [blank, setBlank] = useState(false);
@@ -65,7 +68,7 @@ export default function Plate({
           onLoad={(e) => {
             if (isBlankImage(e.currentTarget)) setBlank(true);
           }}
-          className="h-full w-full object-cover"
+          className={`h-full w-full object-cover ${spin ? "motion-safe:animate-[spin_40s_linear_infinite]" : ""}`}
         />
       ) : (
         <span

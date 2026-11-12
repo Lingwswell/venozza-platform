@@ -21,6 +21,7 @@ import {
 import type { CartItem } from "@/types/order";
 import StorePicker from "@/components/store/StorePicker";
 import Plate from "@/components/site/Plate";
+import FeaturedPlates from "@/components/site/FeaturedPlates";
 import SiteCart from "@/components/site/SiteCart";
 import SiteDialog from "@/components/site/SiteDialog";
 import ProductDialog from "@/components/site/ProductDialog";
@@ -102,7 +103,7 @@ export function HomePage() {
     );
   }, [catalog, categories, search]);
 
-  const featured = useMemo(() => pickFeatured(catalog?.products || [], 3), [catalog]);
+  const featured = useMemo(() => pickFeatured(catalog?.products || [], 5), [catalog]);
 
   // Destaca no menu de categorias a secao que esta na tela.
   useEffect(() => {
@@ -277,44 +278,7 @@ export function HomePage() {
               </div>
             </div>
 
-            {featured.length > 0 ? (
-              <div className="relative mx-auto hidden h-[380px] w-[520px] lg:block">
-                {featured.map((product, index) => {
-                  const layout = [
-                    { size: 300, left: 130, top: 20, z: 3 },
-                    { size: 156, left: 0, top: 200, z: 2 },
-                    { size: 140, left: 380, top: 0, z: 1 },
-                  ][index];
-                  return (
-                    <button
-                      type="button"
-                      key={product.id}
-                      onClick={() => openOrAdd(product)}
-                      aria-label={`${product.name}, ${money(product.price_cents)}`}
-                      className="group absolute rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
-                      style={{ left: layout.left, top: layout.top, zIndex: layout.z }}
-                    >
-                      <Plate
-                        src={product.image}
-                        name={product.name}
-                        size={layout.size}
-                        ring={layout.size > 200 ? 6 : 4}
-                        shadow="0 18px 40px rgba(0,0,0,0.45)"
-                        className="transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transition-none"
-                      />
-                      <span
-                        className={[
-                          "absolute -bottom-3 whitespace-nowrap rounded-full bg-white px-3 py-1.5 text-[13px] font-semibold text-[#1C1917] shadow-sm",
-                          index === 0 ? "left-1/2 -translate-x-1/2" : index === 1 ? "left-0" : "right-0",
-                        ].join(" ")}
-                      >
-                        {product.name} <span className="text-[#B91C1C]">{money(product.price_cents)}</span>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
+            <FeaturedPlates products={featured} onSelect={openOrAdd} />
           </div>
         </section>
       ) : null}
