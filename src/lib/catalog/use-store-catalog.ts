@@ -57,6 +57,8 @@ export type StoreCatalog = {
     address: string | null;
     tenantId: string;
     brandName: string;
+    brandLogo?: string | null;
+    brandColor?: string | null;
   };
   settings: CatalogStoreSettings;
   status: OpenStatus;

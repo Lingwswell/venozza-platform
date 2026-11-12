@@ -4,6 +4,8 @@ import { distanceKm, isValidLatLng } from "@/lib/geo";
 import { toSettingsData } from "@/lib/store/settings";
 import { getOpenStatus } from "@/lib/store/settings-shared";
 import { resolveTenantFromRequest } from "@/lib/tenant/resolve";
+import { isTenantBlocked } from "@/lib/billing/server";
+import { BLOCKED_ORDER_MESSAGE } from "@/lib/billing/state";
 
 // Lojas publicas da rede do dominio acessado. Com ?lat=&lng= (localizacao do
 // celular) devolve a distancia de cada loja e ordena da mais perto para a mais longe.
@@ -43,6 +45,8 @@ export async function GET(req: NextRequest) {
       },
     });
 
+    const blocked = await isTenantBlocked(tenant.id);
+
     const items = stores.map((store) => {
       const storeLat = store.latitude === null ? null : Number(store.latitude);
       const storeLng = store.longitude === null ? null : Number(store.longitude);
@@ -67,7 +71,9 @@ export async function GET(req: NextRequest) {
         deliveryRadiusKm: radius,
         // null = nao da para saber (sem localizacao do cliente ou da loja, ou sem raio)
         deliversHere: distance === null || radius === null || radius <= 0 ? null : distance <= radius,
-        status: getOpenStatus(toSettingsData(store.settings)),
+        status: blocked
+          ? { open: false, reason: "manual" as const, message: BLOCKED_ORDER_MESSAGE }
+          : getOpenStatus(toSettingsData(store.settings)),
       };
     });
 

@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import { prisma } from "@/lib/db";
 import { normalizeRole } from "@/lib/auth/roles";
 import { clientKey, rateLimit } from "@/lib/rate-limit";
+import { isPlatformAdminEmail } from "@/lib/billing/server";
 
 export async function POST(req: Request) {
   try {
@@ -76,6 +77,8 @@ export async function POST(req: Request) {
         role,
         tenantId: user.tenantId,
         storeId: user.storeId,
+        // Ve o painel Redes (administrador da plataforma).
+        platformAdmin: role === "super_admin" || isPlatformAdminEmail(user.email),
       },
     });
   } catch (error) {

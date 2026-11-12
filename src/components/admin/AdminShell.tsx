@@ -5,16 +5,21 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ROLE_LABELS, can, normalizeRole, type Role } from "@/lib/auth/roles";
 import { useStockAlerts } from "@/components/admin/useStockAlerts";
+import { useBillingStatus } from "@/components/admin/useBillingStatus";
 
 type StoredUser = {
   id?: string;
   name?: string;
   email?: string;
   role?: string;
+  platformAdmin?: boolean;
 };
 
+type MenuContext = { platformAdmin: boolean; needsOnboarding: boolean };
+
 // Cada item aparece so para quem tem permissao (o servidor tambem confere).
-const menu: { href: string; label: string; icon: string; show: (role: Role | null) => boolean }[] = [
+const menu: { href: string; label: string; icon: string; show: (role: Role | null, ctx: MenuContext) => boolean }[] = [
+  { href: "/admin/primeiros-passos", label: "Primeiros passos", icon: "🚀", show: (r, ctx) => can.manageStores(r) && ctx.needsOnboarding },
   { href: "/admin/dashboard", label: "Dashboard", icon: "📊", show: can.operateStoreKds },
   { href: "/admin/monitor", label: "Monitor", icon: "🛰️", show: can.viewMonitor },
   { href: "/admin/pedidos", label: "Pedidos", icon: "🧾", show: can.operateStoreKds },
@@ -27,8 +32,9 @@ const menu: { href: string; label: string; icon: string; show: (role: Role | nul
   { href: "/admin/usuarios", label: "Usuários", icon: "👤", show: can.manageUsers },
   { href: "/admin/financeiro", label: "Financeiro", icon: "💰", show: can.viewReports },
   { href: "/admin/marketing", label: "Marketing", icon: "📣", show: can.manageCatalog },
-  { href: "/admin/clientes", label: "Redes", icon: "🌐", show: (r) => r === "super_admin" },
   { href: "/admin/configuracoes", label: "Configurações", icon: "⚙️", show: can.openCloseStore },
+  { href: "/admin/assinatura", label: "Assinatura", icon: "💳", show: can.manageStores },
+  { href: "/admin/redes", label: "Redes (plataforma)", icon: "🌐", show: (r, ctx) => r === "super_admin" || ctx.platformAdmin },
 ];
 
 export default function AdminShell({
@@ -76,6 +82,11 @@ export default function AdminShell({
 
   const role = normalizeRole(user?.role);
   const stockAlerts = useStockAlerts(ready && can.viewStock(role));
+  const billing = useBillingStatus(ready);
+  const menuCtx: MenuContext = {
+    platformAdmin: Boolean(user?.platformAdmin || billing?.platformAdmin),
+    needsOnboarding: Boolean(billing?.needsOnboarding),
+  };
 
   const initials = useMemo(() => {
     const name = user?.name?.trim() || "Admin";
@@ -134,7 +145,7 @@ export default function AdminShell({
           </div>
 
           <nav className="flex-1 space-y-1 px-3 py-3">
-            {menu.filter((item) => item.show(role)).map((item) => {
+            {menu.filter((item) => item.show(role, menuCtx)).map((item) => {
               const active = pathname === item.href;
               return (
                 <Link
@@ -225,10 +236,49 @@ export default function AdminShell({
           </header>
 
           <section className="flex-1 px-4 py-4 sm:px-5 sm:py-5 lg:px-6 lg:py-5">
+            <BillingBanner billing={billing} canManage={can.manageStores(role)} />
             {children}
           </section>
         </div>
       </div>
     </main>
+  );
+}
+
+function BillingBanner({
+  billing,
+  canManage,
+}: {
+  billing: ReturnType<typeof useBillingStatus>;
+  canManage: boolean;
+}) {
+  const state = billing?.state;
+  if (!state || state.key === "active") return null;
+
+  let text = "";
+  let tone = "border-amber-200 bg-amber-50 text-amber-800";
+  if (state.key === "trial") {
+    if (state.daysLeft === null || state.daysLeft > 5) return null;
+    text = `Seu período de teste acaba em ${state.daysLeft} dia(s). Ative a cobrança para não parar de vender.`;
+  } else if (state.key === "past_due" || state.key === "trial_expired") {
+    text = state.blocked
+      ? "Pedidos pelo site e pelo app estão pausados por falta de pagamento."
+      : `Pagamento pendente. Os pedidos online param em ${state.daysLeft} dia(s) se não for pago.`;
+    tone = state.blocked ? "border-rose-200 bg-rose-50 text-rose-800" : tone;
+  } else if (state.key === "suspended" || state.key === "canceled") {
+    text = "Esta rede está suspensa: o site e o app não recebem pedidos. Fale com o suporte.";
+    tone = "border-rose-200 bg-rose-50 text-rose-800";
+  }
+  if (!text) return null;
+
+  return (
+    <div className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold ${tone}`}>
+      <span>{text}</span>
+      {canManage ? (
+        <Link href="/admin/assinatura" className="rounded-xl bg-white px-3 py-1.5 text-xs font-bold text-slate-900 shadow-sm">
+          Ver assinatura
+        </Link>
+      ) : null}
+    </div>
   );
 }

@@ -8,6 +8,8 @@ import {
 import { loadStoreSettings } from "@/lib/store/settings";
 import { enabledPaymentMethods, getOpenStatus } from "@/lib/store/settings-shared";
 import { resolveTenantFromRequest } from "@/lib/tenant/resolve";
+import { isTenantBlocked } from "@/lib/billing/server";
+import { BLOCKED_ORDER_MESSAGE } from "@/lib/billing/state";
 import { loadLivePromotions } from "@/lib/promotions/server";
 import { bestPromoPrice } from "@/lib/promotions/pricing";
 
@@ -66,7 +68,7 @@ export async function GET(req: NextRequest) {
         addressNumber: true,
         addressNeighborhood: true,
         tenantId: true,
-        tenant: { select: { name: true, slug: true } },
+        tenant: { select: { name: true, slug: true, logoUrl: true, brandColor: true } },
       },
     });
 
@@ -77,7 +79,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const [settings, categoryRows, productStores, promos] = await Promise.all([
+    const [settings, categoryRows, productStores, promos, blocked] = await Promise.all([
       loadStoreSettings(store.id),
       prisma.category.findMany({
         where: { tenantId: store.tenantId },
@@ -114,6 +116,7 @@ export async function GET(req: NextRequest) {
         orderBy: { product: { name: "asc" } },
       }),
       loadLivePromotions(store.id, store.tenantId),
+      isTenantBlocked(store.tenantId),
     ]);
 
     let products: CatalogProduct[] = productStores.map((row) => {
@@ -220,6 +223,8 @@ export async function GET(req: NextRequest) {
             .join(", ") || null,
         tenantId: store.tenantId,
         brandName: store.tenant.name,
+        brandLogo: store.tenant.logoUrl,
+        brandColor: store.tenant.brandColor,
       },
       settings: {
         deliveryTimeMinMinutes: settings.deliveryTimeMinMinutes,
@@ -229,7 +234,10 @@ export async function GET(req: NextRequest) {
         freeDeliveryAboveCents: settings.freeDeliveryAboveCents,
         whatsapp: settings.whatsapp,
       },
-      status: getOpenStatus(settings),
+      // Rede bloqueada pela assinatura aparece como fechada.
+      status: blocked
+        ? { open: false, reason: "manual" as const, message: BLOCKED_ORDER_MESSAGE }
+        : getOpenStatus(settings),
       paymentMethods: enabledPaymentMethods(settings),
       categories,
       products,

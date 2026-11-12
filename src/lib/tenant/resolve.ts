@@ -6,7 +6,8 @@ import { prisma } from "@/lib/db";
 // 1. Dominio cadastrado em tenant_domains (ex.: pedidos.venozza.com.br)
 // 2. Subdominio da plataforma: <slug>.PLATFORM_ROOT_DOMAIN (ex.: venozza.suaplataforma.com.br)
 // 3. DEFAULT_TENANT_SLUG do .env (acesso por IP no laboratorio)
-// 4. Se so existe uma rede ativa, ela
+// 4. A rede ativa mais antiga (a primeira da plataforma), para o acesso por IP
+//    continuar funcionando depois que outras redes forem criadas
 
 export type ResolvedTenant = {
   id: string;
@@ -65,13 +66,13 @@ export async function resolveTenantFromHost(host: string): Promise<ResolvedTenan
     if (tenant) return tenant;
   }
 
-  const active = await prisma.tenant.findMany({
+  const first = await prisma.tenant.findFirst({
     where: { active: true },
+    orderBy: { createdAt: "asc" },
     select: tenantSelect,
-    take: 2,
   });
 
-  return active.length === 1 ? active[0] : null;
+  return first;
 }
 
 export async function resolveTenantFromRequest(req: Request) {

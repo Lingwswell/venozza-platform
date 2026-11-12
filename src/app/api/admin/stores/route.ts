@@ -54,6 +54,24 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Só o dono da rede pode criar lojas." }, { status: 403 });
     }
 
+    // Limite de lojas do plano (redes sem plano nao tem limite).
+    const tenantPlan = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { plan: { select: { name: true, maxStores: true } } },
+    });
+    if (tenantPlan?.plan?.maxStores) {
+      const activeStores = await prisma.store.count({ where: { tenantId, active: true } });
+      if (activeStores >= tenantPlan.plan.maxStores) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: `O plano ${tenantPlan.plan.name} vale para até ${tenantPlan.plan.maxStores} loja(s). Mude de plano em Assinatura para abrir outra.`,
+          },
+          { status: 403 }
+        );
+      }
+    }
+
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     const input = parseStoreInput({ ...body, name: body.name ?? "" });
 

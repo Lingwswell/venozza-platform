@@ -15,6 +15,28 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Assinatura (SaaS). Redes antigas ficam "active" e nada muda para elas.
+  // status: trial | active | past_due | suspended | canceled
+  status              String    @default("active")
+  planId              String?
+  trialEndsAt         DateTime?
+  pastDueSince        DateTime?
+  suspendedReason     String?
+  billingName         String?
+  billingEmail        String?
+  billingDocument     String?
+  asaasCustomerId     String?
+  asaasSubscriptionId String?   @unique
+  // Valor mensal enviado ao Asaas (para saber quando atualizar).
+  billingValueCents   Int?
+  // Marca no site
+  logoUrl             String?
+  brandColor          String?
+  onboardedAt         DateTime?
+
+  plan     Plan?     @relation(fields: [planId], references: [id], onDelete: SetNull)
+  invoices Invoice[]
+
   stores       Store[]
   users        User[]
   orders       Order[]
@@ -531,4 +553,56 @@ model SupplyRequestItem {
 
   @@unique([requestId, ingredientId])
   @@map("supply_request_items")
+}
+
+// ===== Camada SaaS =====
+
+model Plan {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  // Valor mensal por loja ativa, em centavos.
+  priceCents  Int
+  trialDays   Int      @default(14)
+  maxStores   Int?
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenants Tenant[]
+
+  @@map("plans")
+}
+
+// Fatura da rede (do Asaas ou lancada a mao pelo super admin).
+// status: pending | paid | overdue | canceled | refunded
+model Invoice {
+  id          String    @id @default(cuid())
+  tenantId    String
+  amountCents Int
+  status      String    @default("pending")
+  dueDate     DateTime
+  paidAt      DateTime?
+  externalId  String?   @unique
+  invoiceUrl  String?
+  billingType String?
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@map("invoices")
+}
+
+// Eventos do webhook ja processados (o Asaas pode mandar o mesmo mais de uma vez).
+model BillingEvent {
+  id        String   @id
+  event     String
+  createdAt DateTime @default(now())
+
+  @@map("billing_events")
 }

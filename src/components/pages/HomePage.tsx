@@ -205,7 +205,12 @@ export function HomePage() {
       <header className="sticky top-0 z-40 h-[76px] border-b border-[#E7E5E4] bg-white">
         <div className="mx-auto flex h-full max-w-[1200px] items-center gap-6 px-6">
           <Link href="/" className={`${displayFont.className} ${focusRing} shrink-0 rounded text-[26px] font-extrabold tracking-[-0.02em] text-[#B91C1C]`}>
-            {brand || " "}
+            {catalog?.store.brandLogo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={catalog.store.brandLogo} alt={brand} className="h-11 w-auto max-w-[180px] object-contain" />
+            ) : (
+              <span style={catalog?.store.brandColor ? { color: catalog.store.brandColor } : undefined}>{brand || " "}</span>
+            )}
           </Link>
 
           <label className="flex w-full max-w-[520px] min-w-0 items-center gap-2.5 rounded-full border border-[#E7E5E4] bg-[#F6F5F2] px-[18px] py-3 focus-within:border-[#B91C1C] focus-within:bg-white">

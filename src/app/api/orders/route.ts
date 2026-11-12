@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { isTenantBlocked } from "@/lib/billing/server";
+import { BLOCKED_ORDER_MESSAGE } from "@/lib/billing/state";
 import { prisma } from "@/lib/db";
 import { getAuthContextFromRequest } from "@/lib/auth/context";
 import { getAdminScope, scopeErrorResponse, storeFilter } from "@/lib/auth/scope";
@@ -212,6 +214,14 @@ export async function POST(req: Request) {
           error: "Loja inválida.",
         },
         { status: 400 }
+      );
+    }
+
+    // Rede com assinatura bloqueada (teste vencido, atraso alem da tolerancia, suspensa).
+    if (await isTenantBlocked(store.tenantId)) {
+      return NextResponse.json(
+        { ok: false, code: "TENANT_BLOCKED", error: BLOCKED_ORDER_MESSAGE },
+        { status: 403 }
       );
     }
 
