@@ -6,12 +6,14 @@ import StockLevels from "@/components/admin/estoque/StockLevels";
 import IngredientsTab from "@/components/admin/estoque/IngredientsTab";
 import RecipesTab from "@/components/admin/estoque/RecipesTab";
 import SupplyTab from "@/components/admin/estoque/SupplyTab";
+import CountTab from "@/components/admin/estoque/CountTab";
+import ReportTab from "@/components/admin/estoque/ReportTab";
 import { can, normalizeRole, type Role } from "@/lib/auth/roles";
 
 // Estoque de insumos: saldo por loja e da cozinha central, insumos, ficha tecnica
 // e pedidos de abastecimento. O servidor confere todas as permissoes.
 
-type Tab = "estoque" | "abastecimento" | "insumos" | "ficha";
+type Tab = "estoque" | "abastecimento" | "contagem" | "relatorio" | "insumos" | "ficha";
 
 function readRole(): Role | null {
   try {
@@ -27,12 +29,18 @@ export default function EstoquePage() {
   const [tab, setTab] = useState<Tab>("estoque");
 
   useEffect(() => {
-    setRole(readRole());
+    const r = readRole();
+    setRole(r);
+    const wanted = new URLSearchParams(window.location.search).get("aba") as Tab | null;
+    if (wanted && ["estoque", "abastecimento", "contagem", "relatorio", "insumos", "ficha"].includes(wanted)) setTab(wanted);
+    else if (r === "kitchen_operator") setTab("abastecimento");
   }, []);
 
   const tabs: { key: Tab; label: string; show: boolean }[] = [
     { key: "estoque", label: "Estoque", show: true },
     { key: "abastecimento", label: "Abastecimento", show: true },
+    { key: "contagem", label: "Contagem", show: true },
+    { key: "relatorio", label: "Relatório", show: true },
     { key: "insumos", label: "Insumos", show: true },
     { key: "ficha", label: "Ficha técnica", show: can.manageCatalog(role) },
   ];
@@ -61,6 +69,8 @@ export default function EstoquePage() {
 
         {tab === "estoque" ? <StockLevels /> : null}
         {tab === "abastecimento" ? <SupplyTab role={role} /> : null}
+        {tab === "contagem" ? <CountTab /> : null}
+        {tab === "relatorio" ? <ReportTab /> : null}
         {tab === "insumos" ? <IngredientsTab /> : null}
         {tab === "ficha" ? <RecipesTab /> : null}
       </div>

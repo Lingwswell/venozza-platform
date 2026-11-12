@@ -18,7 +18,7 @@ export async function GET(req: Request) {
       prisma.product.findMany({
         where: { OR: [{ tenantId: scope.tenantId }, { storeId: { in: scope.storeIds } }] },
         orderBy: [{ category: "asc" }, { name: "asc" }],
-        select: { id: true, name: true, category: true, recipeItems: { select: lineSelect } },
+        select: { id: true, name: true, category: true, price_cents: true, recipeItems: { select: lineSelect } },
       }),
       prisma.optionGroup.findMany({
         where: { tenantId: scope.tenantId, slug: { in: RECIPE_GROUP_SLUGS } },
@@ -29,14 +29,14 @@ export async function GET(req: Request) {
           items: {
             where: { active: true },
             orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-            select: { id: true, name: true, stockFactor: true, recipeItems: { select: lineSelect } },
+            select: { id: true, name: true, price_cents: true, stockFactor: true, recipeItems: { select: lineSelect } },
           },
         },
       }),
       prisma.ingredient.findMany({
         where: { tenantId: scope.tenantId, active: true },
         orderBy: { name: "asc" },
-        select: { id: true, name: true, unit: true },
+        select: { id: true, name: true, unit: true, costCents: true },
       }),
     ]);
 

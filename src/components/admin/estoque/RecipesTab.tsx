@@ -12,15 +12,26 @@ import {
   inputClass,
   primaryButton,
   toBase,
+  costOf,
+  money,
 } from "@/components/admin/estoque/shared";
 
 type Line = { id?: string; ingredientId: string; quantity: number };
-type Product = { id: string; name: string; category: string; recipeItems: Line[] };
-type OptionItem = { id: string; name: string; stockFactor: number | null; recipeItems: Line[] };
+type Product = { id: string; name: string; category: string; price_cents: number; recipeItems: Line[] };
+type OptionItem = { id: string; name: string; price_cents: number; stockFactor: number | null; recipeItems: Line[] };
 type Group = { slug: string; name: string; kind: string | null; items: OptionItem[] };
-type Ingredient = { id: string; name: string; unit: string };
+type Ingredient = { id: string; name: string; unit: string; costCents: number | null };
 
-type Target = { type: "product" | "option"; id: string; name: string; kind?: string | null; stockFactor?: number | null; lines: Line[] };
+type Target = {
+  type: "product" | "option";
+  id: string;
+  name: string;
+  kind?: string | null;
+  stockFactor?: number | null;
+  priceCents?: number;
+  category?: string;
+  lines: Line[];
+};
 type EditLine = { ingredientId: string; text: string; big: boolean };
 
 const KIND_HELP: Record<string, string> = {
@@ -94,6 +105,37 @@ export default function RecipesTab() {
       .slice(0, 3)
       .map((l) => `${nameOf.get(l.ingredientId) || "?"} ${formatQuantity(l.quantity, unitOf.get(l.ingredientId) || "g")}`)
       .join(", ") + (list.length > 3 ? "…" : "");
+  }
+
+  const costById = useMemo(() => new Map(ingredients.map((i) => [i.id, i.costCents])), [ingredients]);
+
+  /** Custo (centavos) de linhas da ficha; factor = proporcao do tamanho (unidades nao mudam). */
+  function linesCost(list: { ingredientId: string; quantity: number }[], factor = 1) {
+    let total = 0;
+    for (const l of list) {
+      const unit = unitOf.get(l.ingredientId) || "g";
+      total += costOf(l.quantity * (unit === "un" ? 1 : factor), unit, costById.get(l.ingredientId));
+    }
+    return total;
+  }
+
+  // Linhas como estao na tela agora (o custo acompanha a edicao).
+  const editingLines = lines
+    .filter((l) => l.ingredientId && l.text.trim())
+    .map((l) => ({ ingredientId: l.ingredientId, quantity: toBase(l.text, unitOf.get(l.ingredientId) || "g", l.big) }))
+    .filter((l) => Number.isFinite(l.quantity) && l.quantity > 0);
+  const missingCost = editingLines.filter((l) => costById.get(l.ingredientId) == null).length;
+
+  const sizeGroup = (() => {
+    if (!target || target.type !== "product") return null;
+    const cat = (target.category || "").toLowerCase();
+    const slug = cat.includes("batata") ? "batata-tamanho" : cat.includes("pizza") ? "pizza-tamanho" : null;
+    return slug ? groups.find((g) => g.slug === slug) || null : null;
+  })();
+
+  function marginLabel(price: number, cost: number) {
+    if (price <= 0) return "—";
+    return `${Math.round(((price - cost) / price) * 100)}%`;
   }
 
   async function save() {
@@ -172,7 +214,9 @@ export default function RecipesTab() {
                 <button
                   key={p.id}
                   type="button"
-                  onClick={() => select({ type: "product", id: p.id, name: p.name, lines: p.recipeItems })}
+                  onClick={() =>
+                    select({ type: "product", id: p.id, name: p.name, priceCents: p.price_cents, category: p.category, lines: p.recipeItems })
+                  }
                   className={itemButton(target?.id === p.id)}
                 >
                   <span className="block text-sm font-bold text-slate-900">{p.name}</span>
@@ -285,6 +329,47 @@ export default function RecipesTab() {
                   + Adicionar insumo
                 </button>
               </div>
+
+              {target.type === "product" && editingLines.length > 0 ? (
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-sm font-black text-slate-900">Custo e margem</p>
+                  {sizeGroup && sizeGroup.items.length > 0 ? (
+                    <table className="mt-2 w-full text-left text-sm">
+                      <thead>
+                        <tr className="text-xs font-bold text-slate-500">
+                          <th className="py-1">Tamanho</th>
+                          <th className="py-1">Custo</th>
+                          <th className="py-1">Preço</th>
+                          <th className="py-1">Margem</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sizeGroup.items.map((size) => {
+                          const cost = linesCost(editingLines, size.stockFactor ?? 1) + linesCost(size.recipeItems);
+                          const price = (target.priceCents || 0) + size.price_cents;
+                          return (
+                            <tr key={size.id} className="border-t border-slate-200">
+                              <td className="py-1.5 text-slate-700">{size.name}</td>
+                              <td className="py-1.5 font-bold text-slate-900">{money(Math.round(cost))}</td>
+                              <td className="py-1.5 text-slate-700">{money(price)}</td>
+                              <td className="py-1.5 font-bold text-emerald-700">{marginLabel(price, cost)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <p className="mt-1 text-sm text-slate-700">
+                      Custo {money(Math.round(linesCost(editingLines)))} · preço {money(target.priceCents || 0)} · margem{" "}
+                      <strong className="text-emerald-700">{marginLabel(target.priceCents || 0, linesCost(editingLines))}</strong>
+                    </p>
+                  )}
+                  <p className="mt-2 text-xs text-slate-500">
+                    Borda, massa e bebidas somam o custo delas quando escolhidas. Preço sem promoção.
+                    {missingCost > 0 ? ` ${missingCost} insumo(s) sem custo cadastrado ficam fora da conta.` : ""}
+                  </p>
+                </div>
+              ) : null}
 
               <div className="flex gap-2">
                 <button type="button" onClick={save} disabled={saving} className={primaryButton}>

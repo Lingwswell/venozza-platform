@@ -10,6 +10,7 @@ import {
   bigUnit,
   cardClass,
   formatQuantity,
+  fromBase,
   ghostButton,
   inputClass,
   primaryButton,
@@ -27,6 +28,7 @@ type Request = {
     id: string;
     quantityRequested: number;
     quantitySent: number | null;
+    quantityReceived: number | null;
     ingredient: { id: string; name: string; unit: string };
   }[];
 };
@@ -48,6 +50,15 @@ export default function SupplyTab({ role }: { role: Role | null }) {
   const [lines, setLines] = useState<NewLine[]>([]);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+  // Envio (central) ou recebimento (loja) com as quantidades de cada item.
+  const [working, setWorking] = useState<{
+    id: string;
+    action: "send" | "receive";
+    values: Record<string, { text: string; big: boolean }>;
+  } | null>(null);
+
+  const isCentral = can.manageCentralStock(role);
+  const isStore = role !== "kitchen_operator" && can.manageStoreStock(role);
 
   const load = useCallback(async (open: boolean) => {
     setLoading(true);
@@ -83,18 +94,56 @@ export default function SupplyTab({ role }: { role: Role | null }) {
       .catch(() => undefined);
   }, [load, role]);
 
-  async function cancel(request: Request) {
-    if (!window.confirm(`Cancelar o pedido de ${request.store.name}?`)) return;
+  async function act(request: Request, action: "separate" | "send" | "receive" | "cancel") {
+    if (action === "cancel" && !window.confirm(`Cancelar o pedido de ${request.store.name}?`)) return;
     setError("");
-    const res = await fetchWithAuth(`/api/admin/stock/supply/${request.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "cancel" }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data?.ok) setError(data?.error || "Erro ao cancelar.");
-    else setSuccess("Pedido cancelado.");
-    await load(onlyOpen);
+    setSuccess("");
+    let quantities: Record<string, number> | undefined;
+    if ((action === "send" || action === "receive") && working?.id === request.id) {
+      quantities = {};
+      for (const item of request.items) {
+        const v = working.values[item.id];
+        const q = v && v.text.trim() !== "" ? toBase(v.text, item.ingredient.unit, v.big) : 0;
+        if (!Number.isFinite(q) || q < 0) {
+          setError(`Quantidade inválida em ${item.ingredient.name}.`);
+          return;
+        }
+        quantities[item.id] = q;
+      }
+    }
+    setSaving(true);
+    try {
+      const res = await fetchWithAuth(`/api/admin/stock/supply/${request.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, quantities }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok) throw new Error(data?.error || "Erro ao atualizar o pedido.");
+      const done: Record<string, string> = {
+        separate: "Pedido em separação.",
+        send: `Enviado para ${request.store.name}. Saiu do estoque da central.`,
+        receive: "Recebimento confirmado. Entrou no estoque da loja.",
+        cancel: "Pedido cancelado.",
+      };
+      setSuccess(done[action]);
+      setWorking(null);
+      await load(onlyOpen);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao atualizar o pedido.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function startWorking(request: Request, action: "send" | "receive") {
+    const values: Record<string, { text: string; big: boolean }> = {};
+    for (const item of request.items) {
+      const base = action === "send" ? item.quantityRequested : item.quantitySent ?? item.quantityRequested;
+      values[item.id] = fromBase(base, item.ingredient.unit);
+    }
+    setWorking({ id: request.id, action, values });
+    setSuccess("");
   }
 
   async function create() {
@@ -260,19 +309,80 @@ export default function SupplyTab({ role }: { role: Role | null }) {
                   {r.origin === "alerta" ? "Automático (abaixo do mínimo)" : "Pedido manual"} ·{" "}
                   {new Date(r.createdAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                 </p>
-                <ul className="mt-3 space-y-1 text-sm">
-                  {r.items.map((item) => (
-                    <li key={item.id} className="flex justify-between gap-2">
-                      <span className="text-slate-700">{item.ingredient.name}</span>
-                      <span className="font-bold text-slate-900">{formatQuantity(item.quantityRequested, item.ingredient.unit)}</span>
-                    </li>
-                  ))}
-                </ul>
+                {working?.id === r.id ? (
+                  <div className="mt-3 space-y-2">
+                    <p className="text-xs font-bold text-slate-500">
+                      {working.action === "send" ? "Quanto está sendo enviado" : "Quanto chegou de verdade"}
+                    </p>
+                    {r.items.map((item) => {
+                      const v = working.values[item.id] || { text: "", big: false };
+                      return (
+                        <div key={item.id} className="grid grid-cols-[1fr_200px] items-center gap-2">
+                          <span className="text-sm text-slate-700">{item.ingredient.name}</span>
+                          <QtyInput
+                            unit={item.ingredient.unit}
+                            text={v.text}
+                            big={v.big}
+                            onText={(text) => setWorking({ ...working, values: { ...working.values, [item.id]: { ...v, text } } })}
+                            onBig={(big) => setWorking({ ...working, values: { ...working.values, [item.id]: { ...v, big } } })}
+                            ariaLabel={`Quantidade de ${item.ingredient.name}`}
+                          />
+                        </div>
+                      );
+                    })}
+                    <div className="flex gap-2 pt-1">
+                      <button type="button" disabled={saving} onClick={() => act(r, working.action)} className={primaryButton}>
+                        {working.action === "send" ? "Confirmar envio" : "Confirmar recebimento"}
+                      </button>
+                      <button type="button" onClick={() => setWorking(null)} className={ghostButton}>
+                        Voltar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <ul className="mt-3 space-y-1 text-sm">
+                    {r.items.map((item) => (
+                      <li key={item.id} className="flex justify-between gap-2">
+                        <span className="text-slate-700">{item.ingredient.name}</span>
+                        <span className="text-right">
+                          <strong className="text-slate-900">{formatQuantity(item.quantityRequested, item.ingredient.unit)}</strong>
+                          {item.quantitySent !== null && item.quantitySent !== item.quantityRequested ? (
+                            <span className="block text-xs text-slate-500">enviado {formatQuantity(item.quantitySent, item.ingredient.unit)}</span>
+                          ) : null}
+                          {item.quantityReceived !== null && item.quantityReceived !== (item.quantitySent ?? item.quantityRequested) ? (
+                            <span className="block text-xs font-bold text-rose-600">
+                              chegou {formatQuantity(item.quantityReceived, item.ingredient.unit)}
+                            </span>
+                          ) : null}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 {r.note ? <p className="mt-2 text-xs text-slate-500">{r.note}</p> : null}
-                {r.status === "aberto" && canRequest ? (
-                  <button type="button" onClick={() => cancel(r)} className={`${ghostButton} mt-3 text-rose-600`}>
-                    Cancelar pedido
-                  </button>
+                {working?.id !== r.id ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {isCentral && r.status === "aberto" ? (
+                      <button type="button" disabled={saving} onClick={() => act(r, "separate")} className={ghostButton}>
+                        Começar a separar
+                      </button>
+                    ) : null}
+                    {isCentral && (r.status === "aberto" || r.status === "separando") ? (
+                      <button type="button" disabled={saving} onClick={() => startWorking(r, "send")} className={primaryButton}>
+                        Enviar
+                      </button>
+                    ) : null}
+                    {isStore && r.status === "enviado" ? (
+                      <button type="button" disabled={saving} onClick={() => startWorking(r, "receive")} className={primaryButton}>
+                        Confirmar recebimento
+                      </button>
+                    ) : null}
+                    {(r.status === "aberto" && (isStore || isCentral)) || (r.status === "separando" && isCentral) ? (
+                      <button type="button" disabled={saving} onClick={() => act(r, "cancel")} className={`${ghostButton} text-rose-600`}>
+                        Cancelar pedido
+                      </button>
+                    ) : null}
+                  </div>
                 ) : null}
               </article>
             );

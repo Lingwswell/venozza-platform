@@ -418,6 +418,8 @@ model Ingredient {
   // Minimo padrao nas lojas (ex.: 500 g) e quanto pedir a central quando passa dele.
   minStore        Float?
   reorderQuantity Float?
+  // Custo em centavos por kg (g), por litro (ml) ou por unidade (un).
+  costCents       Int?
   active          Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -471,7 +473,7 @@ model StockLevel {
   @@map("stock_levels")
 }
 
-// Historico: entrada, venda, estorno, ajuste, perda, abastecimento.
+// Historico: entrada, venda, estorno, ajuste, contagem, perda, abastecimento.
 model StockMovement {
   id              String   @id @default(cuid())
   tenantId        String
@@ -502,6 +504,8 @@ model SupplyRequest {
   status    String   @default("aberto")
   origin    String   @default("alerta")
   note      String?
+  sentAt     DateTime?
+  receivedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -520,6 +524,7 @@ model SupplyRequestItem {
   ingredientId      String
   quantityRequested Float
   quantitySent      Float?
+  quantityReceived  Float?
 
   request    SupplyRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
   ingredient Ingredient    @relation(fields: [ingredientId], references: [id], onDelete: Restrict)

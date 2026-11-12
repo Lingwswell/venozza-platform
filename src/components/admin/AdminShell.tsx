@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ROLE_LABELS, can, normalizeRole, type Role } from "@/lib/auth/roles";
+import { useStockAlerts } from "@/components/admin/useStockAlerts";
 
 type StoredUser = {
   id?: string;
@@ -74,6 +75,7 @@ export default function AdminShell({
   }, [router]);
 
   const role = normalizeRole(user?.role);
+  const stockAlerts = useStockAlerts(ready && can.viewStock(role));
 
   const initials = useMemo(() => {
     const name = user?.name?.trim() || "Admin";
@@ -148,6 +150,20 @@ export default function AdminShell({
                 >
                   <span className="text-base">{item.icon}</span>
                   <span className="truncate">{item.label}</span>
+                  {item.href === "/admin/estoque" && stockAlerts.count > 0 ? (
+                    <span
+                      className="ml-auto rounded-full bg-rose-500 px-2 py-0.5 text-[11px] font-bold text-white"
+                      title={[
+                        stockAlerts.central ? `${stockAlerts.central} pedido(s) para a central` : "",
+                        stockAlerts.low ? `${stockAlerts.low} insumo(s) abaixo do mínimo` : "",
+                        stockAlerts.toReceive ? `${stockAlerts.toReceive} envio(s) para receber` : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    >
+                      {stockAlerts.count}
+                    </span>
+                  ) : null}
                 </Link>
               );
             })}

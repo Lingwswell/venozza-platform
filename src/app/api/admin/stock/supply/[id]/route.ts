@@ -1,32 +1,30 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
 import { getAdminScope, scopeErrorResponse } from "@/lib/auth/scope";
-import { assertLocation, stockFail } from "@/lib/stock/access";
+import { StockInputError, stockFail } from "@/lib/stock/access";
+import { runSupplyAction, type SupplyAction } from "@/lib/stock/supply";
 
-// Loja cancela um pedido que a central ainda nao comecou a separar.
-// (Separar, enviar e receber chegam na proxima entrega, com o painel da central.)
+const ACTIONS: SupplyAction[] = ["separate", "send", "receive", "cancel"];
+
+// Separar / enviar (central), receber (loja), cancelar.
+// body: { action, quantities?: { [itemId]: numero } } (quantidades na unidade base)
 export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
     const scope = await getAdminScope(req);
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+    const action = String(body.action || "") as SupplyAction;
+    if (!ACTIONS.includes(action)) return stockFail("Ação inválida.", 400);
 
-    const request = await prisma.supplyRequest.findFirst({
-      where: { id, tenantId: scope.tenantId },
-      select: { id: true, storeId: true, status: true },
-    });
-    if (!request) return stockFail("Pedido não encontrado.", 404);
-    assertLocation(scope, request.storeId, true);
+    const quantities =
+      body.quantities && typeof body.quantities === "object" ? (body.quantities as Record<string, unknown>) : {};
 
-    if (body.action !== "cancel") return stockFail("Ação inválida.", 400);
-    if (request.status !== "aberto") return stockFail("A central já começou este pedido; não dá mais para cancelar.", 409);
-
-    await prisma.supplyRequest.update({ where: { id }, data: { status: "cancelado" } });
+    await runSupplyAction(scope, id, action, quantities);
     return NextResponse.json({ ok: true });
   } catch (error) {
     const scoped = scopeErrorResponse(error);
     if (scoped) return scoped;
+    if (error instanceof StockInputError) return stockFail((error as Error).message, 400);
     console.error("[api/admin/stock/supply/:id][PATCH]", error);
-    return stockFail("Erro ao cancelar o pedido.", 500);
+    return stockFail("Erro ao atualizar o pedido.", 500);
   }
 }

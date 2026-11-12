@@ -2,7 +2,11 @@
 
 // Pecas comuns das telas de estoque.
 
-export { formatQuantity, UNIT_LABELS } from "@/lib/stock/consumption";
+export { formatQuantity, UNIT_LABELS, costOf, costUnitLabel } from "@/lib/stock/consumption";
+
+export function money(cents: number) {
+  return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
 
 export const inputClass =
   "w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold outline-none focus:border-orange-400";
@@ -98,7 +102,8 @@ export const MOVEMENT_LABELS: Record<string, string> = {
   entrada: "Entrada",
   venda: "Venda",
   estorno: "Pedido cancelado",
-  ajuste: "Acerto de contagem",
+  ajuste: "Acerto",
+  contagem: "Contagem",
   perda: "Perda",
   abastecimento: "Abastecimento",
 };

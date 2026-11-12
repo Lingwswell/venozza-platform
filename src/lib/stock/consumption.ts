@@ -160,3 +160,14 @@ export const UNIT_LABELS: Record<string, string> = {
   ml: "Volume (ml / L)",
   un: "Unidade",
 };
+
+/** Custo (centavos) de uma quantidade: costCents e por kg (g), por litro (ml) ou por unidade (un). */
+export function costOf(quantity: number, unit: string, costCents: number | null | undefined) {
+  if (typeof costCents !== "number" || !Number.isFinite(quantity)) return 0;
+  return unit === "un" ? quantity * costCents : (quantity / 1000) * costCents;
+}
+
+/** Nome da unidade em que o custo e informado. */
+export function costUnitLabel(unit: string) {
+  return unit === "g" ? "kg" : unit === "ml" ? "L" : "un";
+}

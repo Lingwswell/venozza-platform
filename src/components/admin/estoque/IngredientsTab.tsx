@@ -14,6 +14,8 @@ import {
   inputClass,
   primaryButton,
   toBase,
+  costUnitLabel,
+  money,
 } from "@/components/admin/estoque/shared";
 
 type Ingredient = {
@@ -22,6 +24,7 @@ type Ingredient = {
   unit: string;
   minStore: number | null;
   reorderQuantity: number | null;
+  costCents: number | null;
   active: boolean;
   _count: { recipeItems: number };
 };
@@ -33,6 +36,7 @@ type Form = {
   minBig: boolean;
   reorderText: string;
   reorderBig: boolean;
+  costText: string;
   active: boolean;
 };
 
@@ -43,6 +47,7 @@ const emptyForm: Form = {
   minBig: false,
   reorderText: "",
   reorderBig: true,
+  costText: "",
   active: true,
 };
 
@@ -93,6 +98,7 @@ export default function IngredientsTab() {
       minBig: min.big,
       reorderText: reorder.text,
       reorderBig: reorder.text ? reorder.big : bigUnit(item.unit) !== null,
+      costText: item.costCents !== null ? (item.costCents / 100).toFixed(2).replace(".", ",") : "",
       active: item.active,
     });
     setError("");
@@ -108,11 +114,16 @@ export default function IngredientsTab() {
       if ((minStore !== null && !Number.isFinite(minStore)) || (reorderQuantity !== null && !Number.isFinite(reorderQuantity))) {
         throw new Error("Número inválido.");
       }
+      const costRaw = form.costText.trim();
+      const costCents = costRaw
+        ? Math.round(Number(costRaw.includes(",") ? costRaw.replace(/\./g, "").replace(",", ".") : costRaw) * 100)
+        : null;
+      if (costCents !== null && (!Number.isFinite(costCents) || costCents < 0)) throw new Error("Custo inválido.");
       const isNew = editing === "new";
       const res = await fetchWithAuth(isNew ? "/api/admin/stock/ingredients" : `/api/admin/stock/ingredients/${editing}`, {
         method: isNew ? "POST" : "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: form.name, unit: form.unit, minStore, reorderQuantity, active: form.active }),
+        body: JSON.stringify({ name: form.name, unit: form.unit, minStore, reorderQuantity, costCents, active: form.active }),
       });
       const data = await res.json();
       if (!res.ok || !data?.ok) throw new Error(data?.error || "Erro ao salvar o insumo.");
@@ -192,6 +203,18 @@ export default function IngredientsTab() {
                 ariaLabel="Quantidade de reposição"
               />
             </div>
+            <label>
+              <span className="mb-1 block text-xs font-bold text-slate-500">
+                Quanto custa, em R$ por {costUnitLabel(form.unit)} (para calcular a margem)
+              </span>
+              <input
+                value={form.costText}
+                onChange={(e) => setForm({ ...form, costText: e.target.value })}
+                inputMode="decimal"
+                placeholder={form.unit === "un" ? "Ex.: 0,80" : "Ex.: 42,90"}
+                className={inputClass}
+              />
+            </label>
             <label className="flex items-center gap-2 text-sm font-bold text-slate-800">
               <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
               Insumo em uso
@@ -223,6 +246,7 @@ export default function IngredientsTab() {
                     {UNIT_LABELS[item.unit] || item.unit}
                     {item.minStore !== null ? ` · mínimo ${formatQuantity(item.minStore, item.unit)}` : " · sem mínimo"}
                     {item.reorderQuantity !== null ? ` · pede ${formatQuantity(item.reorderQuantity, item.unit)}` : ""}
+                    {item.costCents !== null ? ` · ${money(item.costCents)}/${costUnitLabel(item.unit)}` : " · sem custo"}
                     {` · em ${item._count.recipeItems} ficha(s)`}
                   </p>
                 </div>

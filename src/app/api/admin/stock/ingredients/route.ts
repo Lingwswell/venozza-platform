@@ -11,6 +11,7 @@ const select = {
   unit: true,
   minStore: true,
   reorderQuantity: true,
+  costCents: true,
   active: true,
   _count: { select: { recipeItems: true } },
 } as const;
