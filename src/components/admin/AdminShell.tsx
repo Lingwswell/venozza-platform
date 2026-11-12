@@ -21,6 +21,7 @@ const menu: { href: string; label: string; icon: string; show: (role: Role | nul
   { href: "/admin/produtos", label: "Produtos", icon: "🍕", show: can.operateStoreKds },
   { href: "/admin/categorias", label: "Categorias", icon: "🗂️", show: can.manageCatalog },
   { href: "/admin/opcoes", label: "Opções", icon: "🧩", show: can.manageCatalog },
+  { href: "/admin/estoque", label: "Estoque", icon: "📦", show: can.viewStock },
   { href: "/admin/lojas", label: "Lojas", icon: "🏬", show: can.manageStores },
   { href: "/admin/usuarios", label: "Usuários", icon: "👤", show: can.manageUsers },
   { href: "/admin/financeiro", label: "Financeiro", icon: "💰", show: can.viewReports },

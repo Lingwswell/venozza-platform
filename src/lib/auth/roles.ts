@@ -58,6 +58,12 @@ export const can = {
   openCloseStore: (r: Role | null) => r !== null && r !== "kitchen_operator",
   operateStoreKds: (r: Role | null) => r !== null && r !== "kitchen_operator",
   editProductAvailability: (r: Role | null) => isMultiStoreRole(r) || r === "manager",
+  // Estoque da loja: entrada, acerto, minimo, pedido a central.
+  manageStoreStock: (r: Role | null) => isMultiStoreRole(r) || r === "manager",
+  // Estoque e pedidos da cozinha central.
+  manageCentralStock: (r: Role | null) => isNetworkRole(r) || r === "kitchen_operator",
+  viewStock: (r: Role | null) =>
+    isMultiStoreRole(r) || r === "manager" || r === "kitchen_operator",
 };
 
 /** Quais papeis cada um pode criar/editar na tela de usuarios. */

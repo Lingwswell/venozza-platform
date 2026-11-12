@@ -188,6 +188,7 @@ export class OrderRepository {
               addons_json: Array.isArray(item.addons)
                 ? JSON.stringify(item.addons)
                 : null,
+              flavorIds: (item as unknown as { flavorIds?: string[] }).flavorIds ?? [],
             })),
           },
         },

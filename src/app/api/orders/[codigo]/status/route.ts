@@ -7,6 +7,7 @@ import {
   getStoreChannel,
   getTenantChannel,
 } from "@/lib/realtime/kds-realtime";
+import { applyOrderConsumption, reverseOrderConsumption, safeStockHook } from "@/lib/stock/server";
 
 const STATUS_FLOW: Record<string, string[]> = {
   novo: ["preparo", "cancelado"],
@@ -83,6 +84,14 @@ export async function PATCH(
         },
       },
     });
+
+    // Estoque de insumos: baixa ao entrar em preparo, devolve se cancelar.
+    // Qualquer erro aqui so vai para o log; o KDS segue normal.
+    if (nextStatus === "preparo") {
+      await safeStockHook("baixa", () => applyOrderConsumption(updated.id));
+    } else if (nextStatus === "cancelado") {
+      await safeStockHook("estorno", () => reverseOrderConsumption(updated.id));
+    }
 
     const realtime = getKdsRealtimeAdapter();
 
