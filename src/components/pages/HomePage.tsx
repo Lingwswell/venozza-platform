@@ -103,7 +103,21 @@ export function HomePage() {
     );
   }, [catalog, categories, search]);
 
-  const featured = useMemo(() => pickFeatured(catalog?.products || [], 5), [catalog]);
+  // Topo do site: se houver produtos marcados como "Destaque" no admin, so eles;
+  // senao todas as pizzas da loja. Em ordem aleatoria a cada visita e revezando
+  // todas, entao cada pizza nova cadastrada entra no rodizio sozinha.
+  const featured = useMemo(() => {
+    const all = catalog?.products || [];
+    const marked = all.filter((p) => p.featured);
+    const pizzasOnly = all.filter((p) => detectProductKind(p) === "pizza");
+    const pool = marked.length > 0 ? marked : pizzasOnly.length > 0 ? pizzasOnly : pickFeatured(all, 3);
+    const shuffled = [...pool];
+    for (let i = shuffled.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled.slice(0, 30);
+  }, [catalog]);
 
   // Destaca no menu de categorias a secao que esta na tela.
   useEffect(() => {

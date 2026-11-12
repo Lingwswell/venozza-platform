@@ -18,7 +18,7 @@ const SLOTS = [
 const ROTATE_MS = 5000;
 
 // Pratos em destaque da abertura do site: giram devagar e se revezam nos lugares.
-// Os produtos sao os marcados como "Destaque" no admin (ate 5).
+// Os produtos vem da pagina (destaques do admin ou todas as pizzas, em ordem aleatoria).
 export default function FeaturedPlates({
   products,
   onSelect,
