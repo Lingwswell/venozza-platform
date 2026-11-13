@@ -26,6 +26,7 @@ export default function SiteCheckoutPage() {
   const [items, setItems] = useState<CartItem[]>([]);
   const [ready, setReady] = useState(false);
   const [form, setForm] = useState({ name: "", phone: "", address: "", notes: "", payment: "" });
+  const [orderType, setOrderType] = useState<"entrega" | "retirada">("entrega");
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -49,7 +50,9 @@ export default function SiteCheckoutPage() {
     () => items.reduce((s, i) => s + Number(i.price_cents || 0) * i.quantity, 0),
     [items]
   );
-  const fee = catalog ? computeDeliveryFeeCents({ ...DEFAULT_STORE_SETTINGS, ...catalog.settings }, subtotal) : 0;
+  const pickupEnabled = catalog?.settings.pickupEnabled !== false;
+  const pickup = pickupEnabled && orderType === "retirada";
+  const fee = catalog && !pickup ? computeDeliveryFeeCents({ ...DEFAULT_STORE_SETTINGS, ...catalog.settings }, subtotal) : 0;
   const minimum = catalog?.settings.minimumOrderCents || 0;
   const missing = minimum > 0 && subtotal < minimum ? minimum - subtotal : 0;
   const closed = catalog ? !catalog.status.open : false;
@@ -63,7 +66,7 @@ export default function SiteCheckoutPage() {
     e.preventDefault();
     if (!form.name.trim()) return setMessage("Informe seu nome.");
     if (form.phone.replace(/\D/g, "").length < 10) return setMessage("Informe um telefone com DDD.");
-    if (!form.address.trim()) return setMessage("Informe o endereço de entrega.");
+    if (!pickup && !form.address.trim()) return setMessage("Informe o endereço de entrega.");
     if (closed) return setMessage(catalog?.status.message || "A loja está fechada.");
     if (missing > 0) return setMessage(`Faltam ${money(missing)} para o pedido mínimo.`);
 
@@ -77,7 +80,8 @@ export default function SiteCheckoutPage() {
         body: JSON.stringify({
           customerName: form.name.trim(),
           phone: form.phone.trim(),
-          address: form.address.trim(),
+          address: pickup ? "" : form.address.trim(),
+          order_type: pickup ? "retirada" : "entrega",
           notes: form.notes.trim(),
           items: items.map((item) => ({ ...item, tenantId: store.tenantId, storeId: store.storeId })),
           tenantId: store.tenantId,
@@ -129,7 +133,9 @@ export default function SiteCheckoutPage() {
           <h1 className={`${displayFont.className} text-4xl font-extrabold tracking-[-0.03em]`}>Finalizar pedido</h1>
           {catalog ? (
             <p className="mt-2 text-[#57534E]">
-              Entrega pela {catalog.store.name}. Pagamento na entrega.
+              {pickup
+                ? `Retirada na ${catalog.store.name}. Pagamento na retirada.`
+                : `Entrega pela ${catalog.store.name}. Pagamento na entrega.`}
             </p>
           ) : null}
 
@@ -152,10 +158,40 @@ export default function SiteCheckoutPage() {
                   <input value={form.phone} onChange={(e) => update("phone", e.target.value)} autoComplete="tel" inputMode="tel" placeholder="(11) 99999-9999" className={input} />
                 </label>
               </div>
-              <label className="block">
-                <span className="mb-1.5 block text-sm font-semibold">Endereço de entrega</span>
-                <textarea value={form.address} onChange={(e) => update("address", e.target.value)} autoComplete="street-address" rows={3} placeholder="Rua, número, complemento, bairro" className={input} />
-              </label>
+              {pickupEnabled ? (
+                <fieldset>
+                  <legend className="mb-2 text-sm font-semibold">Como você quer receber?</legend>
+                  <div className="flex flex-wrap gap-2">
+                    {(
+                      [
+                        ["entrega", "Entrega"],
+                        ["retirada", "Retirar na loja"],
+                      ] as const
+                    ).map(([value, label]) => (
+                      <label
+                        key={value}
+                        className={[
+                          "cursor-pointer rounded-full border px-4 py-2.5 text-sm font-medium focus-within:outline focus-within:outline-2 focus-within:outline-[#B91C1C]",
+                          orderType === value ? "border-[#B91C1C] bg-[#FDF2F1] text-[#991B1B]" : "border-[#E7E5E4] bg-white",
+                        ].join(" ")}
+                      >
+                        <input type="radio" name="recebimento" className="sr-only" checked={orderType === value} onChange={() => setOrderType(value)} />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              ) : null}
+              {pickup ? (
+                <p className="rounded-2xl border border-[#E7E5E4] bg-white px-4 py-3 text-sm text-[#57534E]">
+                  Retire na <strong className="text-[#1C1917]">{catalog?.store.name}</strong>. Avisamos quando estiver pronto.
+                </p>
+              ) : (
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-semibold">Endereço de entrega</span>
+                  <textarea value={form.address} onChange={(e) => update("address", e.target.value)} autoComplete="street-address" rows={3} placeholder="Rua, número, complemento, bairro" className={input} />
+                </label>
+              )}
               <label className="block">
                 <span className="mb-1.5 block text-sm font-semibold">Observações para a loja <span className="font-normal text-[#8A8580]">(opcional)</span></span>
                 <input value={form.notes} onChange={(e) => update("notes", e.target.value)} placeholder="Ex.: interfone quebrado, troco para R$ 100" className={input} />
@@ -219,7 +255,7 @@ export default function SiteCheckoutPage() {
             </ul>
             <dl className="mt-3 space-y-1.5 border-t border-[#E7E5E4] pt-3 text-sm">
               <div className="flex justify-between text-[#57534E]"><dt>Subtotal</dt><dd>{money(subtotal)}</dd></div>
-              <div className="flex justify-between text-[#57534E]"><dt>Entrega</dt><dd>{fee > 0 ? money(fee) : "Grátis"}</dd></div>
+              <div className="flex justify-between text-[#57534E]"><dt>{pickup ? "Retirada" : "Entrega"}</dt><dd>{pickup ? "Sem taxa" : fee > 0 ? money(fee) : "Grátis"}</dd></div>
               <div className="flex justify-between pt-1 text-base font-bold"><dt>Total</dt><dd>{money(subtotal + fee)}</dd></div>
             </dl>
           </div>

@@ -257,15 +257,20 @@ export default function LojasPage() {
 
     setSaving(true);
     try {
-      const res = await fetchWithAuth(
-        editingId === "new" ? "/api/admin/stores" : `/api/admin/stores/${editingId}`,
-        {
+      const send = (payload: Record<string, unknown>) =>
+        fetchWithAuth(editingId === "new" ? "/api/admin/stores" : `/api/admin/stores/${editingId}`, {
           method: editingId === "new" ? "POST" : "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        }
-      );
-      const data = await res.json();
+          body: JSON.stringify(payload),
+        });
+      let res = await send(body);
+      let data = await res.json();
+      // Loja extra do plano: confirma o valor a mais na mensalidade.
+      if (res.status === 409 && data?.code === "EXTRA_STORE_CONFIRM") {
+        if (!window.confirm(`${data.error} Abrir a loja mesmo assim?`)) return;
+        res = await send({ ...body, confirmExtra: true });
+        data = await res.json();
+      }
       if (!res.ok || !data?.ok) throw new Error(data?.error || "Erro ao salvar loja.");
 
       setSuccess(editingId === "new" ? "Loja criada." : "Loja salva.");

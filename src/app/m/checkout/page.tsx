@@ -29,6 +29,7 @@ export default function MobileCheckoutPage() {
   const [address, setAddress] = useState("");
   const [notes, setNotes] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("pix");
+  const [orderType, setOrderType] = useState<"entrega" | "retirada">("entrega");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -72,13 +73,16 @@ export default function MobileCheckoutPage() {
     }, 0);
   }, [items]);
 
+  const pickupEnabled = catalog?.settings.pickupEnabled !== false;
+  const pickup = pickupEnabled && orderType === "retirada";
+
   const deliveryFeeCents = useMemo(() => {
-    if (!catalog) return 0;
+    if (!catalog || pickup) return 0;
     return computeDeliveryFeeCents(
       { ...DEFAULT_STORE_SETTINGS, ...catalog.settings },
       subtotalCents
     );
-  }, [catalog, subtotalCents]);
+  }, [catalog, subtotalCents, pickup]);
 
   const minimumOrderCents = catalog?.settings.minimumOrderCents || 0;
   const belowMinimum = minimumOrderCents > 0 && subtotalCents < minimumOrderCents;
@@ -136,7 +140,7 @@ export default function MobileCheckoutPage() {
       return;
     }
 
-    if (!address.trim()) {
+    if (!pickup && !address.trim()) {
       setMessage("Informe seu endereço.");
       return;
     }
@@ -170,7 +174,8 @@ export default function MobileCheckoutPage() {
         body: JSON.stringify({
           customerName,
           phone,
-          address,
+          address: pickup ? "" : address,
+          order_type: pickup ? "retirada" : "entrega",
           notes,
           items: items.map((item) => ({
             ...item,
@@ -352,7 +357,9 @@ export default function MobileCheckoutPage() {
                   Subtotal: {formatMoneyFromCents(subtotalCents)}
                 </div>
                 <div className="mb-1 text-[#666]">
-                  Entrega: {deliveryFeeCents > 0 ? formatMoneyFromCents(deliveryFeeCents) : "grátis"}
+                  {pickup
+                    ? "Retirada na loja: sem taxa"
+                    : `Entrega: ${deliveryFeeCents > 0 ? formatMoneyFromCents(deliveryFeeCents) : "grátis"}`}
                 </div>
                 <span className="text-lg font-black text-[#171717]">
                   Total: {formatMoneyFromCents(finalTotalCents)}
@@ -366,7 +373,32 @@ export default function MobileCheckoutPage() {
           onSubmit={handleSubmit}
           className="space-y-4 rounded-3xl border border-[#eadfda] bg-white p-4 shadow-sm"
         >
-          <h2 className="text-lg font-black">Dados de entrega</h2>
+          <h2 className="text-lg font-black">{pickup ? "Dados para retirada" : "Dados de entrega"}</h2>
+
+          {pickupEnabled ? (
+            <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Como você quer receber">
+              {(
+                [
+                  ["entrega", "Entrega"],
+                  ["retirada", "Retirar na loja"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={orderType === value}
+                  onClick={() => setOrderType(value)}
+                  className={[
+                    "rounded-2xl border px-4 py-3 text-sm font-bold",
+                    orderType === value ? "border-[#ff1010] bg-[#fff1f1] text-[#d10000]" : "border-[#e7ddd8] text-[#555]",
+                  ].join(" ")}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          ) : null}
 
           <input
             value={customerName}
@@ -382,12 +414,18 @@ export default function MobileCheckoutPage() {
             className="w-full rounded-2xl border border-[#e7ddd8] px-4 py-3 text-sm outline-none"
           />
 
-          <textarea
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            placeholder="Endereço completo"
-            className="min-h-28 w-full rounded-2xl border border-[#e7ddd8] px-4 py-3 text-sm outline-none"
-          />
+          {pickup ? (
+            <p className="rounded-2xl bg-[#faf6f4] px-4 py-3 text-sm text-[#555]">
+              Retire na {catalog?.store.name || "loja"}. Avisamos quando estiver pronto.
+            </p>
+          ) : (
+            <textarea
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="Endereço completo"
+              className="min-h-28 w-full rounded-2xl border border-[#e7ddd8] px-4 py-3 text-sm outline-none"
+            />
+          )}
 
           <textarea
             value={notes}

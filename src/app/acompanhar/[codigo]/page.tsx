@@ -20,6 +20,7 @@ type OrderData = {
   total: number;
   paymentMethod?: string;
   status: string;
+  orderType?: string | null;
   createdAt?: string;
   items: OrderItem[];
 };
@@ -115,7 +116,9 @@ export default function AcompanharPedidoPage({
               <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
                 <p className="text-sm text-neutral-500">Status atual</p>
                 <h2 className="mt-1 text-2xl font-bold text-neutral-900">
-                  {statusLabels[order.status] || order.status}
+                  {order.orderType === "retirada" && order.status === "pronto"
+                    ? "Pronto para retirar"
+                    : statusLabels[order.status] || order.status}
                 </h2>
 
                 <div className="mt-4 space-y-2 text-sm text-neutral-600">
@@ -174,7 +177,7 @@ export default function AcompanharPedidoPage({
             </section>
 
             {order.status !== "cancelado" ? (
-              <OrderStatusTracker status={order.status} />
+              <OrderStatusTracker status={order.status} orderType={order.orderType} />
             ) : (
               <div className="rounded-2xl border border-red-200 bg-white p-5 shadow-sm">
                 <h2 className="text-lg font-semibold text-red-600">

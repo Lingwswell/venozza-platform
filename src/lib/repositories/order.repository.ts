@@ -168,6 +168,7 @@ export class OrderRepository {
           customerName,
           phone,
           address: input.address ?? "",
+          orderType: input.order_type === "retirada" ? "retirada" : "entrega",
           notes: input.notes ?? null,
           subtotal_cents: input.subtotal_cents,
           freight_cents: input.freight_cents,

@@ -3,9 +3,10 @@ import { prisma } from "@/lib/db";
 import { getAdminScope, scopeErrorResponse } from "@/lib/auth/scope";
 import { isNetworkRole, type Role } from "@/lib/auth/roles";
 import { forgetBillingCache, graceDays } from "@/lib/billing/server";
-import { billingState, monthlyValueCents } from "@/lib/billing/state";
+import { billingState } from "@/lib/billing/state";
 import { asaasConfigured } from "@/lib/billing/asaas";
-import { activateSubscription, billingErrorMessage, pullInvoices, syncSubscriptionValue } from "@/lib/billing/sync";
+import { activateSubscription, billingErrorMessage, pullInvoices, syncSubscriptionValue, tenantMonthly } from "@/lib/billing/sync";
+import { forgetFeatures } from "@/lib/billing/features";
 
 // Assinatura da propria rede (dono).
 
@@ -41,20 +42,41 @@ export async function GET(req: Request) {
           billingName: true,
           billingEmail: true,
           billingDocument: true,
-          plan: { select: { id: true, name: true, priceCents: true, maxStores: true, description: true } },
+          plan: {
+            select: { id: true, name: true, priceCents: true, maxStores: true, extraStorePriceCents: true, description: true },
+          },
+          addons: { select: { addonId: true } },
         },
       }),
       prisma.plan.findMany({
         where: { active: true },
         orderBy: { sortOrder: "asc" },
-        select: { id: true, name: true, priceCents: true, maxStores: true, description: true },
+        select: { id: true, name: true, priceCents: true, maxStores: true, extraStorePriceCents: true, description: true },
       }),
       prisma.store.count({ where: { tenantId: scope.tenantId, active: true } }),
       prisma.invoice.findMany({
         where: { tenantId: scope.tenantId },
         orderBy: { dueDate: "desc" },
         take: 12,
-        select: { id: true, amountCents: true, status: true, dueDate: true, paidAt: true, invoiceUrl: true, billingType: true },
+        select: {
+          id: true,
+          amountCents: true,
+          status: true,
+          dueDate: true,
+          paidAt: true,
+          invoiceUrl: true,
+          billingType: true,
+          description: true,
+          kind: true,
+        },
+      }),
+    ]);
+    const [monthly, addons] = await Promise.all([
+      tenantMonthly(scope.tenantId),
+      prisma.addon.findMany({
+        where: { active: true },
+        orderBy: { sortOrder: "asc" },
+        select: { id: true, name: true, description: true, priceCents: true, feature: true },
       }),
     ]);
     if (!tenant) return NextResponse.json({ ok: false, error: "Rede não encontrada." }, { status: 404 });
@@ -68,7 +90,9 @@ export async function GET(req: Request) {
       plan: tenant.plan,
       plans,
       stores,
-      monthlyCents: tenant.plan ? monthlyValueCents(tenant.plan.priceCents, stores) : null,
+      monthlyCents: monthly?.breakdown?.totalCents ?? null,
+      breakdown: monthly?.breakdown ?? null,
+      addons: addons.map((a) => ({ ...a, contracted: tenant.addons.some((t) => t.addonId === a.id) })),
       asaas: asaasConfigured(),
       hasSubscription: Boolean(tenant.asaasSubscriptionId),
       billing: {
@@ -108,11 +132,11 @@ export async function POST(req: Request) {
     if (body.action === "change_plan") {
       const plan = await prisma.plan.findFirst({
         where: { id: String(body.planId || ""), active: true },
-        select: { id: true, maxStores: true, name: true },
+        select: { id: true, maxStores: true, extraStorePriceCents: true, name: true },
       });
       if (!plan) return NextResponse.json({ ok: false, error: "Plano inválido." }, { status: 400 });
       const stores = await prisma.store.count({ where: { tenantId: scope.tenantId, active: true } });
-      if (plan.maxStores !== null && stores > plan.maxStores) {
+      if (plan.maxStores !== null && plan.extraStorePriceCents === null && stores > plan.maxStores) {
         return NextResponse.json(
           { ok: false, error: `O plano ${plan.name} vale para até ${plan.maxStores} loja(s). Você tem ${stores} ativas.` },
           { status: 400 }
@@ -121,6 +145,27 @@ export async function POST(req: Request) {
       await prisma.tenant.update({ where: { id: scope.tenantId }, data: { planId: plan.id } });
       await syncSubscriptionValue(scope.tenantId);
       forgetBillingCache(scope.tenantId);
+      return NextResponse.json({ ok: true });
+    }
+
+    // Contratar ou cancelar um adicional (soma na mensalidade).
+    if (body.action === "toggle_addon") {
+      const addon = await prisma.addon.findFirst({
+        where: { id: String(body.addonId || ""), active: true },
+        select: { id: true },
+      });
+      if (!addon) return NextResponse.json({ ok: false, error: "Adicional inválido." }, { status: 400 });
+      if (body.enabled === true) {
+        await prisma.tenantAddon.upsert({
+          where: { tenantId_addonId: { tenantId: scope.tenantId, addonId: addon.id } },
+          create: { tenantId: scope.tenantId, addonId: addon.id },
+          update: {},
+        });
+      } else {
+        await prisma.tenantAddon.deleteMany({ where: { tenantId: scope.tenantId, addonId: addon.id } });
+      }
+      forgetFeatures(scope.tenantId);
+      await syncSubscriptionValue(scope.tenantId);
       return NextResponse.json({ ok: true });
     }
 

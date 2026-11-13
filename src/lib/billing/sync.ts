@@ -5,7 +5,9 @@ import {
   cancelSubscription,
   cleanDocument,
   createCustomer,
+  createPayment,
   createSubscription,
+  getPayment,
   invoiceStatusFromAsaas,
   isoDateSP,
   listSubscriptionPayments,
@@ -13,14 +15,18 @@ import {
   type AsaasPayment,
 } from "@/lib/billing/asaas";
 import { forgetBillingCache } from "@/lib/billing/server";
-import { monthlyValueCents } from "@/lib/billing/state";
+import { monthlyBreakdown } from "@/lib/billing/state";
 
 // Liga a assinatura da rede ao Asaas e atualiza o status a partir das faturas.
 
 export class BillingInputError extends Error {}
 
 /** Grava (ou atualiza) a fatura vinda do Asaas. */
-export async function upsertInvoiceFromPayment(tenantId: string, payment: AsaasPayment) {
+export async function upsertInvoiceFromPayment(
+  tenantId: string,
+  payment: AsaasPayment,
+  kind: "subscription" | "one_off" = payment.subscription ? "subscription" : "one_off"
+) {
   const status = invoiceStatusFromAsaas(payment.status);
   const paidDate = payment.clientPaymentDate || payment.paymentDate;
   const data = {
@@ -34,7 +40,7 @@ export async function upsertInvoiceFromPayment(tenantId: string, payment: AsaasP
   };
   await prisma.invoice.upsert({
     where: { externalId: payment.id },
-    create: { ...data, tenantId, externalId: payment.id },
+    create: { ...data, tenantId, externalId: payment.id, kind },
     update: data,
   });
 }
@@ -55,8 +61,9 @@ export async function refreshTenantStatus(tenantId: string) {
   }
 
   const [overdue, paid] = await Promise.all([
+    // Cobranca unica atrasada nao bloqueia a rede; so a mensalidade.
     prisma.invoice.findFirst({
-      where: { tenantId, status: "overdue" },
+      where: { tenantId, status: "overdue", kind: "subscription" },
       orderBy: { dueDate: "asc" },
       select: { dueDate: true },
     }),
@@ -79,23 +86,95 @@ export async function refreshTenantStatus(tenantId: string) {
 
 /** Busca as faturas da assinatura no Asaas (funciona mesmo sem webhook). */
 export async function pullInvoices(tenantId: string) {
+  if (!asaasConfigured()) return;
   const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { asaasSubscriptionId: true } });
-  if (!tenant?.asaasSubscriptionId || !asaasConfigured()) return;
-  const payments = await listSubscriptionPayments(tenant.asaasSubscriptionId);
-  for (const payment of payments) await upsertInvoiceFromPayment(tenantId, payment);
+  if (tenant?.asaasSubscriptionId) {
+    const payments = await listSubscriptionPayments(tenant.asaasSubscriptionId);
+    for (const payment of payments) await upsertInvoiceFromPayment(tenantId, payment, "subscription");
+  }
+  // Cobrancas unicas ainda em aberto.
+  const openOneOffs = await prisma.invoice.findMany({
+    where: { tenantId, kind: "one_off", status: { in: ["pending", "overdue"] }, externalId: { not: null } },
+    select: { externalId: true },
+    take: 20,
+  });
+  for (const inv of openOneOffs) {
+    const payment = await getPayment(inv.externalId!).catch(() => null);
+    if (payment) await upsertInvoiceFromPayment(tenantId, payment, "one_off");
+  }
   await refreshTenantStatus(tenantId);
 }
 
-async function currentValue(tenantId: string) {
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-    select: { name: true, plan: { select: { name: true, priceCents: true } } },
+/**
+ * Cobranca unica (implantacao, cadastro de cardapio...). Com Asaas e cliente cadastrado,
+ * gera a fatura la (Pix/boleto/cartao); senao fica como fatura manual em aberto.
+ */
+export async function chargeOnce(tenantId: string, input: { amountCents: number; description: string; dueDate: Date }) {
+  const amountCents = Math.round(input.amountCents);
+  if (!Number.isFinite(amountCents) || amountCents < 500) throw new BillingInputError("Valor mínimo: R$ 5,00.");
+  const description = input.description.trim().slice(0, 120) || "Cobrança avulsa";
+
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { asaasCustomerId: true } });
+  if (asaasConfigured() && tenant?.asaasCustomerId) {
+    const payment = await createPayment({
+      customer: tenant.asaasCustomerId,
+      valueCents: amountCents,
+      dueDate: isoDateSP(input.dueDate),
+      description,
+      externalReference: tenantId,
+    });
+    await upsertInvoiceFromPayment(tenantId, { ...payment, description }, "one_off");
+    return { viaAsaas: true };
+  }
+
+  await prisma.invoice.create({
+    data: {
+      tenantId,
+      amountCents,
+      status: "pending",
+      dueDate: input.dueDate,
+      billingType: "MANUAL",
+      description,
+      kind: "one_off",
+    },
   });
-  if (!tenant?.plan) throw new BillingInputError("Escolha um plano antes de ativar a cobrança.");
-  const stores = await prisma.store.count({ where: { tenantId, active: true } });
+  return { viaAsaas: false };
+}
+
+/** Valor do mes da rede: plano + lojas extras + adicionais contratados. */
+export async function tenantMonthly(tenantId: string) {
+  const [tenant, stores] = await Promise.all([
+    prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: {
+        name: true,
+        plan: { select: { name: true, priceCents: true, maxStores: true, extraStorePriceCents: true } },
+        addons: { select: { addon: { select: { name: true, priceCents: true, active: true } } } },
+      },
+    }),
+    prisma.store.count({ where: { tenantId, active: true } }),
+  ]);
+  if (!tenant) return null;
+  const addonsCents = tenant.addons.reduce((sum, a) => sum + (a.addon.active ? a.addon.priceCents : 0), 0);
   return {
-    valueCents: monthlyValueCents(tenant.plan.priceCents, stores),
-    description: `${tenant.plan.name} — ${Math.max(stores, 1)} loja(s) — ${tenant.name}`,
+    tenantName: tenant.name,
+    plan: tenant.plan,
+    stores,
+    addons: tenant.addons.map((a) => a.addon.name),
+    breakdown: tenant.plan ? monthlyBreakdown(tenant.plan, stores, addonsCents) : null,
+  };
+}
+
+async function currentValue(tenantId: string) {
+  const monthly = await tenantMonthly(tenantId);
+  if (!monthly?.plan || !monthly.breakdown) throw new BillingInputError("Escolha um plano antes de ativar a cobrança.");
+  const extras = [
+    monthly.breakdown.extraStores ? `${monthly.breakdown.extraStores} loja(s) extra` : "",
+    ...monthly.addons,
+  ].filter(Boolean);
+  return {
+    valueCents: monthly.breakdown.totalCents,
+    description: `${monthly.plan.name} — ${Math.max(monthly.stores, 1)} loja(s)${extras.length ? ` + ${extras.join(", ")}` : ""} — ${monthly.tenantName}`.slice(0, 250),
   };
 }
 

@@ -3,7 +3,9 @@ import { prisma } from "@/lib/db";
 import { getAdminScope, scopeErrorResponse } from "@/lib/auth/scope";
 import { assertPlatformAdmin, forgetBillingCache } from "@/lib/billing/server";
 import { NetworkInputError, cleanHost } from "@/lib/billing/network";
+import { forgetFeatures } from "@/lib/billing/features";
 import {
+  chargeOnce,
   billingErrorMessage,
   pullInvoices,
   refreshTenantStatus,
@@ -129,6 +131,40 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
       case "sync": {
         await pullInvoices(id);
         await syncSubscriptionValue(id);
+        await refreshTenantStatus(id);
+        break;
+      }
+      case "toggle_addon": {
+        const addon = await prisma.addon.findUnique({ where: { id: String(body.addonId || "") }, select: { id: true } });
+        if (!addon) return NextResponse.json({ ok: false, error: "Adicional inválido." }, { status: 400 });
+        if (body.enabled === true) {
+          await prisma.tenantAddon.upsert({
+            where: { tenantId_addonId: { tenantId: id, addonId: addon.id } },
+            create: { tenantId: id, addonId: addon.id },
+            update: {},
+          });
+        } else {
+          await prisma.tenantAddon.deleteMany({ where: { tenantId: id, addonId: addon.id } });
+        }
+        forgetFeatures(id);
+        await syncSubscriptionValue(id);
+        break;
+      }
+      case "charge_once": {
+        const days = Math.min(Math.max(Math.round(Number(body.dueDays) || 3), 0), 60);
+        await chargeOnce(id, {
+          amountCents: Number(body.amountCents),
+          description: String(body.description || ""),
+          dueDate: new Date(Date.now() + days * 24 * 60 * 60 * 1000),
+        });
+        break;
+      }
+      case "mark_invoice_paid": {
+        const updated = await prisma.invoice.updateMany({
+          where: { id: String(body.invoiceId || ""), tenantId: id, status: { in: ["pending", "overdue"] } },
+          data: { status: "paid", paidAt: new Date() },
+        });
+        if (updated.count === 0) return NextResponse.json({ ok: false, error: "Fatura não encontrada ou já paga." }, { status: 400 });
         await refreshTenantStatus(id);
         break;
       }

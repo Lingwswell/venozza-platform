@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { storeOpening } from "@/lib/billing/state";
+import { syncSubscriptionValue } from "@/lib/billing/sync";
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
 import { getAdminScope, scopeErrorResponse } from "@/lib/auth/scope";
@@ -54,14 +56,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Só o dono da rede pode criar lojas." }, { status: 403 });
     }
 
+    const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+
     // Limite de lojas do plano (redes sem plano nao tem limite).
+    // Plano com loja extra: pede confirmacao do valor a mais antes de criar.
     const tenantPlan = await prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { plan: { select: { name: true, maxStores: true } } },
+      select: { plan: { select: { name: true, priceCents: true, maxStores: true, extraStorePriceCents: true } } },
     });
-    if (tenantPlan?.plan?.maxStores) {
+    if (tenantPlan?.plan) {
       const activeStores = await prisma.store.count({ where: { tenantId, active: true } });
-      if (activeStores >= tenantPlan.plan.maxStores) {
+      const opening = storeOpening(tenantPlan.plan, activeStores);
+      if (!opening.allowed) {
         return NextResponse.json(
           {
             ok: false,
@@ -70,9 +76,19 @@ export async function POST(req: Request) {
           { status: 403 }
         );
       }
+      if (opening.extraCents > 0 && body.confirmExtra !== true) {
+        return NextResponse.json(
+          {
+            ok: false,
+            code: "EXTRA_STORE_CONFIRM",
+            extraCents: opening.extraCents,
+            error: `Esta loja acrescenta ${(opening.extraCents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} por mês na sua mensalidade.`,
+          },
+          { status: 409 }
+        );
+      }
     }
 
-    const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     const input = parseStoreInput({ ...body, name: body.name ?? "" });
 
     const slug = input.slug || slugifyStore(input.name || "");
@@ -156,6 +172,9 @@ export async function POST(req: Request) {
 
       return created;
     });
+
+    // Mensalidade acompanha o numero de lojas (assinatura no Asaas, se houver).
+    await syncSubscriptionValue(tenantId).catch((error) => console.warn("[stores][POST][billing]", error));
 
     return NextResponse.json({ ok: true, store: serializeStore(store) }, { status: 201 });
   } catch (error) {

@@ -40,6 +40,7 @@ type FormState = {
   paymentCash: boolean;
   paymentCredit: boolean;
   paymentDebit: boolean;
+  pickupEnabled: boolean;
 };
 
 function centsToInput(cents: number | null | undefined) {
@@ -76,6 +77,7 @@ function toForm(s: StoreSettingsData): FormState {
     paymentCash: s.paymentCash,
     paymentCredit: s.paymentCredit,
     paymentDebit: s.paymentDebit,
+    pickupEnabled: s.pickupEnabled !== false,
   };
 }
 
@@ -182,6 +184,7 @@ export default function ConfiguracoesPage() {
           paymentCash: form.paymentCash,
           paymentCredit: form.paymentCredit,
           paymentDebit: form.paymentDebit,
+          pickupEnabled: form.pickupEnabled,
         };
 
     setSaving(true);
@@ -379,6 +382,16 @@ export default function ConfiguracoesPage() {
                     </label>
                   ))}
                 </div>
+                <label className="mt-4 flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={form.pickupEnabled}
+                    onChange={(e) => update("pickupEnabled", e.target.checked)}
+                  />
+                  <span className="text-sm font-bold text-slate-800">
+                    Aceitar retirada na loja <span className="font-normal text-slate-500">(o cliente escolhe no checkout, sem taxa de entrega)</span>
+                  </span>
+                </label>
               </section>
 
               <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">

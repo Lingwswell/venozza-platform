@@ -81,3 +81,65 @@ export function monthlyValueCents(priceCents: number, activeStores: number) {
 
 /** Mensagem que o cliente do site ve quando a rede esta bloqueada. */
 export const BLOCKED_ORDER_MESSAGE = "Pedidos online indisponíveis no momento. Fale com a loja.";
+
+// ===== Valor do mes com loja extra e adicionais =====
+
+export type PlanPricing = {
+  priceCents: number;
+  maxStores: number | null;
+  extraStorePriceCents?: number | null;
+};
+
+export type MonthlyBreakdown = {
+  /** Valor do plano (por loja, ou fixo cobrindo as lojas incluidas). */
+  baseCents: number;
+  /** Lojas cobertas pelo valor do plano (null = plano cobrado por loja). */
+  includedStores: number | null;
+  extraStores: number;
+  extraCents: number;
+  addonsCents: number;
+  totalCents: number;
+};
+
+/**
+ * - Plano sem preco de loja extra: preco x lojas ativas (minimo 1); maxStores e limite.
+ * - Plano com preco de loja extra: preco cobre maxStores lojas (minimo 1); cada loja a mais soma o preco extra.
+ * Adicionais contratados somam no fim.
+ */
+export function monthlyBreakdown(plan: PlanPricing, activeStores: number, addonsCents = 0): MonthlyBreakdown {
+  const stores = Math.max(1, activeStores);
+  const addons = Math.max(0, addonsCents);
+  if (typeof plan.extraStorePriceCents === "number" && plan.extraStorePriceCents >= 0) {
+    const included = Math.max(1, plan.maxStores ?? 1);
+    const extraStores = Math.max(0, stores - included);
+    const extraCents = extraStores * plan.extraStorePriceCents;
+    return {
+      baseCents: plan.priceCents,
+      includedStores: included,
+      extraStores,
+      extraCents,
+      addonsCents: addons,
+      totalCents: plan.priceCents + extraCents + addons,
+    };
+  }
+  const baseCents = Math.max(0, plan.priceCents) * stores;
+  return { baseCents, includedStores: null, extraStores: 0, extraCents: 0, addonsCents: addons, totalCents: baseCents + addons };
+}
+
+/** Pode abrir mais uma loja? Com preco de loja extra, pode, e diz quanto soma por mes. */
+export function storeOpening(plan: PlanPricing | null, activeStores: number) {
+  if (!plan) return { allowed: true, extraCents: 0 };
+  if (typeof plan.extraStorePriceCents === "number" && plan.extraStorePriceCents >= 0) {
+    const included = Math.max(1, plan.maxStores ?? 1);
+    return { allowed: true, extraCents: activeStores + 1 > included ? plan.extraStorePriceCents : 0 };
+  }
+  if (plan.maxStores !== null && activeStores >= plan.maxStores) return { allowed: false, extraCents: 0 };
+  // Plano por loja: a loja nova soma o preco do plano.
+  return { allowed: true, extraCents: activeStores >= 1 ? plan.priceCents : 0 };
+}
+
+/** Recursos vendidos como adicional (a chave fica em Addon.feature). */
+export const FEATURES: Record<string, string> = {
+  estoque: "Estoque, ficha técnica e cozinha central",
+  promocoes: "Promoções em balão no site e no app",
+};

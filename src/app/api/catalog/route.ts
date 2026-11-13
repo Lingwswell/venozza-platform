@@ -233,6 +233,7 @@ export async function GET(req: NextRequest) {
         deliveryFeeCents: settings.deliveryFeeCents,
         freeDeliveryAboveCents: settings.freeDeliveryAboveCents,
         whatsapp: settings.whatsapp,
+        pickupEnabled: settings.pickupEnabled,
       },
       // Rede bloqueada pela assinatura aparece como fechada.
       status: blocked

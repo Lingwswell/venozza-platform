@@ -13,6 +13,7 @@ type Plan = {
   priceCents: number;
   trialDays: number;
   maxStores: number | null;
+  extraStorePriceCents: number | null;
 };
 
 const field =
@@ -115,7 +116,11 @@ export default function ComecarPage() {
                       <span>
                         <span className="block font-bold">
                           {p.name} · {money(p.priceCents)}
-                          <span className="font-normal text-[#57534E]"> por loja/mês</span>
+                          <span className="font-normal text-[#57534E]">
+                            {p.extraStorePriceCents !== null
+                              ? ` por mês (${p.maxStores || 1} loja${(p.maxStores || 1) > 1 ? "s" : ""}, extra ${money(p.extraStorePriceCents)})`
+                              : " por loja/mês"}
+                          </span>
                         </span>
                         {p.description ? <span className="block text-sm text-[#57534E]">{p.description}</span> : null}
                       </span>

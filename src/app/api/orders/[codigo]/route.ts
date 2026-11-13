@@ -57,6 +57,7 @@ export async function GET(
         freight_cents: order.freight_cents,
         total_cents: order.total_cents,
         paymentMethod: order.paymentMethod,
+        orderType: order.orderType,
         status: order.status,
         storeId: order.storeId,
         storeName: order.store?.name ?? null,

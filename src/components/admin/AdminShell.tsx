@@ -15,7 +15,7 @@ type StoredUser = {
   platformAdmin?: boolean;
 };
 
-type MenuContext = { platformAdmin: boolean; needsOnboarding: boolean };
+type MenuContext = { platformAdmin: boolean; needsOnboarding: boolean; features: Record<string, boolean> };
 
 // Cada item aparece so para quem tem permissao (o servidor tambem confere).
 const menu: { href: string; label: string; icon: string; show: (role: Role | null, ctx: MenuContext) => boolean }[] = [
@@ -27,11 +27,11 @@ const menu: { href: string; label: string; icon: string; show: (role: Role | nul
   { href: "/admin/produtos", label: "Produtos", icon: "🍕", show: can.operateStoreKds },
   { href: "/admin/categorias", label: "Categorias", icon: "🗂️", show: can.manageCatalog },
   { href: "/admin/opcoes", label: "Opções", icon: "🧩", show: can.manageCatalog },
-  { href: "/admin/estoque", label: "Estoque", icon: "📦", show: can.viewStock },
+  { href: "/admin/estoque", label: "Estoque", icon: "📦", show: (r, ctx) => can.viewStock(r) && ctx.features.estoque !== false },
   { href: "/admin/lojas", label: "Lojas", icon: "🏬", show: can.manageStores },
   { href: "/admin/usuarios", label: "Usuários", icon: "👤", show: can.manageUsers },
   { href: "/admin/financeiro", label: "Financeiro", icon: "💰", show: can.viewReports },
-  { href: "/admin/marketing", label: "Marketing", icon: "📣", show: can.manageCatalog },
+  { href: "/admin/marketing", label: "Marketing", icon: "📣", show: (r, ctx) => can.manageCatalog(r) && ctx.features.promocoes !== false },
   { href: "/admin/configuracoes", label: "Configurações", icon: "⚙️", show: can.openCloseStore },
   { href: "/admin/assinatura", label: "Assinatura", icon: "💳", show: can.manageStores },
   { href: "/admin/redes", label: "Redes (plataforma)", icon: "🌐", show: (r, ctx) => r === "super_admin" || ctx.platformAdmin },
@@ -86,6 +86,7 @@ export default function AdminShell({
   const menuCtx: MenuContext = {
     platformAdmin: Boolean(user?.platformAdmin || billing?.platformAdmin),
     needsOnboarding: Boolean(billing?.needsOnboarding),
+    features: billing?.features || {},
   };
 
   const initials = useMemo(() => {

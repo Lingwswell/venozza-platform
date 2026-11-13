@@ -95,6 +95,28 @@ export async function updateSubscriptionValue(id: string, valueCents: number, de
   });
 }
 
+/** Cobranca unica (fora da mensalidade). */
+export async function createPayment(input: {
+  customer: string;
+  valueCents: number;
+  dueDate: string;
+  description: string;
+  externalReference: string;
+}) {
+  return asaas<AsaasPayment>("POST", "/payments", {
+    customer: input.customer,
+    billingType: "UNDEFINED",
+    value: Math.round(input.valueCents) / 100,
+    dueDate: input.dueDate,
+    description: input.description,
+    externalReference: input.externalReference,
+  });
+}
+
+export async function getPayment(id: string) {
+  return asaas<AsaasPayment>("GET", `/payments/${encodeURIComponent(id)}`);
+}
+
 export async function cancelSubscription(id: string) {
   await asaas("DELETE", `/subscriptions/${encodeURIComponent(id)}`);
 }

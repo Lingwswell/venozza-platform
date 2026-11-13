@@ -46,6 +46,7 @@ export type StoreSettingsData = {
   paymentCash: boolean;
   paymentCredit: boolean;
   paymentDebit: boolean;
+  pickupEnabled: boolean;
 };
 
 // Usado quando a loja ainda nao tem linha em store_settings.
@@ -64,6 +65,7 @@ export const DEFAULT_STORE_SETTINGS: StoreSettingsData = {
   paymentCash: true,
   paymentCredit: false,
   paymentDebit: false,
+  pickupEnabled: true,
 };
 
 export function defaultOpeningHours(): OpeningHours {

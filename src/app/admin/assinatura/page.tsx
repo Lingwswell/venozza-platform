@@ -3,11 +3,19 @@
 import { useCallback, useEffect, useState } from "react";
 import AdminShell from "@/components/admin/AdminShell";
 import { fetchWithAuth } from "@/lib/auth/fetch-auth";
-import { BILLING_LABELS, type BillingState } from "@/lib/billing/state";
+import { BILLING_LABELS, type BillingState, type MonthlyBreakdown } from "@/lib/billing/state";
 
 // Assinatura da rede (dono): plano, valor, faturas e ativacao da cobranca.
 
-type Plan = { id: string; name: string; priceCents: number; maxStores: number | null; description: string | null };
+type Plan = {
+  id: string;
+  name: string;
+  priceCents: number;
+  maxStores: number | null;
+  extraStorePriceCents: number | null;
+  description: string | null;
+};
+type AddonOption = { id: string; name: string; description: string | null; priceCents: number; contracted: boolean };
 type Invoice = {
   id: string;
   amountCents: number;
@@ -16,6 +24,8 @@ type Invoice = {
   paidAt: string | null;
   invoiceUrl: string | null;
   billingType: string | null;
+  description: string | null;
+  kind: string;
 };
 type Data = {
   name: string;
@@ -25,6 +35,8 @@ type Data = {
   plans: Plan[];
   stores: number;
   monthlyCents: number | null;
+  breakdown: MonthlyBreakdown | null;
+  addons: AddonOption[];
   asaas: boolean;
   hasSubscription: boolean;
   billing: { name: string | null; email: string | null; document: string | null };
@@ -132,13 +144,28 @@ export default function AssinaturaPage() {
                 <p className="text-xs font-bold text-slate-500">Plano</p>
                 <p className="mt-1 text-2xl font-black text-slate-900">{data.plan?.name || "Sem plano"}</p>
                 <p className="mt-1 text-sm text-slate-600">
-                  {data.plan ? `${money(data.plan.priceCents)} por loja ativa, por mês.` : "Fale com o suporte."}
+                  {!data.plan
+                    ? "Fale com o suporte."
+                    : data.plan.extraStorePriceCents !== null
+                      ? `${money(data.plan.priceCents)}/mês com ${data.plan.maxStores || 1} loja(s). Loja extra: ${money(data.plan.extraStorePriceCents)}/mês.`
+                      : `${money(data.plan.priceCents)} por loja ativa, por mês.`}
                 </p>
               </div>
               <div className={card}>
                 <p className="text-xs font-bold text-slate-500">Valor do mês</p>
                 <p className="mt-1 text-2xl font-black text-slate-900">{data.monthlyCents !== null ? money(data.monthlyCents) : "—"}</p>
                 <p className="mt-1 text-sm text-slate-600">{data.stores} loja(s) ativa(s). Abriu ou fechou loja, o valor acompanha.</p>
+                {data.breakdown && (data.breakdown.extraCents > 0 || data.breakdown.addonsCents > 0) ? (
+                  <ul className="mt-2 space-y-0.5 text-xs text-slate-500">
+                    <li>Plano: {money(data.breakdown.baseCents)}</li>
+                    {data.breakdown.extraCents > 0 ? (
+                      <li>
+                        {data.breakdown.extraStores} loja(s) extra: {money(data.breakdown.extraCents)}
+                      </li>
+                    ) : null}
+                    {data.breakdown.addonsCents > 0 ? <li>Adicionais: {money(data.breakdown.addonsCents)}</li> : null}
+                  </ul>
+                ) : null}
               </div>
             </section>
 
@@ -152,10 +179,17 @@ export default function AssinaturaPage() {
                       <div key={p.id} className={`rounded-2xl border p-4 ${current ? "border-orange-400 bg-orange-50" : "border-slate-200"}`}>
                         <p className="font-black text-slate-900">{p.name}</p>
                         <p className="text-lg font-black text-slate-900">
-                          {money(p.priceCents)} <span className="text-xs font-semibold text-slate-500">/loja/mês</span>
+                          {money(p.priceCents)}{" "}
+                          <span className="text-xs font-semibold text-slate-500">{p.extraStorePriceCents !== null ? "/mês" : "/loja/mês"}</span>
                         </p>
                         <p className="mt-1 text-xs text-slate-600">{p.description}</p>
-                        <p className="mt-1 text-xs text-slate-500">{p.maxStores ? `Até ${p.maxStores} loja(s)` : "Lojas ilimitadas"}</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {p.extraStorePriceCents !== null
+                            ? `${p.maxStores || 1} loja(s) incluída(s) · extra ${money(p.extraStorePriceCents)}/mês`
+                            : p.maxStores
+                              ? `Até ${p.maxStores} loja(s)`
+                              : "Lojas ilimitadas"}
+                        </p>
                         {current ? (
                           <p className="mt-2 text-xs font-bold text-orange-700">Seu plano</p>
                         ) : (
@@ -171,6 +205,47 @@ export default function AssinaturaPage() {
                       </div>
                     );
                   })}
+                </div>
+              </section>
+            ) : null}
+
+            {data.addons.length > 0 && data.plan ? (
+              <section className={card}>
+                <h3 className="text-base font-black text-slate-900">Adicionais</h3>
+                <p className="mt-1 text-sm text-slate-600">Ligue o que quiser usar. O valor entra na próxima mensalidade.</p>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  {data.addons.map((a) => (
+                    <div key={a.id} className={`rounded-2xl border p-4 ${a.contracted ? "border-emerald-300 bg-emerald-50" : "border-slate-200"}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-black text-slate-900">{a.name}</p>
+                          <p className="text-sm text-slate-600">{a.description}</p>
+                        </div>
+                        <p className="shrink-0 font-black text-slate-900">
+                          {money(a.priceCents)}
+                          <span className="text-xs font-semibold text-slate-500">/mês</span>
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => {
+                          if (a.contracted && !window.confirm(`Cancelar ${a.name}? O recurso sai do painel.`)) return;
+                          post(
+                            { action: "toggle_addon", addonId: a.id, enabled: !a.contracted },
+                            a.contracted ? `${a.name} cancelado.` : `${a.name} contratado. Já está liberado no painel.`
+                          );
+                        }}
+                        className={
+                          a.contracted
+                            ? "mt-3 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-white"
+                            : `${primary} mt-3`
+                        }
+                      >
+                        {a.contracted ? "Cancelar" : "Contratar"}
+                      </button>
+                    </div>
+                  ))}
                 </div>
               </section>
             ) : null}
@@ -215,6 +290,7 @@ export default function AssinaturaPage() {
                     return (
                       <li key={i.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
                         <span className="text-slate-700">
+                          {i.kind === "one_off" ? `${i.description || "Cobrança única"} · ` : ""}
                           Vence {date(i.dueDate)} · <strong className="text-slate-900">{money(i.amountCents)}</strong>
                           {i.paidAt ? <span className="text-slate-500"> · paga em {date(i.paidAt)}</span> : null}
                         </span>

@@ -8,6 +8,7 @@ export type BillingStatus = {
   state: BillingState;
   platformAdmin: boolean;
   needsOnboarding: boolean;
+  features: Record<string, boolean>;
 } | null;
 
 // Situacao da assinatura para o menu e o aviso do topo (uma vez por pagina).
@@ -21,7 +22,12 @@ export function useBillingStatus(enabled: boolean): BillingStatus {
       .then((res) => res.json())
       .then((data) => {
         if (!cancelled && data?.ok) {
-          setStatus({ state: data.state, platformAdmin: Boolean(data.platformAdmin), needsOnboarding: Boolean(data.needsOnboarding) });
+          setStatus({
+            state: data.state,
+            platformAdmin: Boolean(data.platformAdmin),
+            needsOnboarding: Boolean(data.needsOnboarding),
+            features: data.features || {},
+          });
         }
       })
       .catch(() => undefined);

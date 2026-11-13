@@ -45,6 +45,7 @@ export type CatalogStoreSettings = {
   deliveryFeeCents: number;
   freeDeliveryAboveCents: number | null;
   whatsapp: string | null;
+  pickupEnabled?: boolean;
 };
 
 export type StoreCatalog = {

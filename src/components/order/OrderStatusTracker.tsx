@@ -13,13 +13,24 @@ const steps: OrderStep[] = [
   { key: "entregue", label: "Entregue" },
 ];
 
-function getStepIndex(status: string) {
-  const idx = steps.findIndex((step) => step.key === status);
+// Retirada na loja: nao tem "saiu para entrega".
+const pickupSteps: OrderStep[] = [
+  { key: "novo", label: "Pedido recebido" },
+  { key: "preparo", label: "Em preparo" },
+  { key: "pronto", label: "Pronto para retirar" },
+  { key: "finalizado", label: "Retirado" },
+];
+
+function getStepIndex(list: OrderStep[], status: string) {
+  // "finalizado" e o ultimo passo nos dois fluxos.
+  const key = status === "finalizado" && list === steps ? "entregue" : status;
+  const idx = list.findIndex((step) => step.key === key);
   return idx === -1 ? 0 : idx;
 }
 
-export default function OrderStatusTracker({ status }: { status: string }) {
-  const currentIndex = getStepIndex(status);
+export default function OrderStatusTracker({ status, orderType }: { status: string; orderType?: string | null }) {
+  const list = orderType === "retirada" ? pickupSteps : steps;
+  const currentIndex = getStepIndex(list, status);
 
   return (
     <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
@@ -28,7 +39,7 @@ export default function OrderStatusTracker({ status }: { status: string }) {
       </h2>
 
       <div className="space-y-4">
-        {steps.map((step, index) => {
+        {list.map((step, index) => {
           const done = index <= currentIndex;
           const isCurrent = index === currentIndex;
 
@@ -45,7 +56,7 @@ export default function OrderStatusTracker({ status }: { status: string }) {
                 >
                   {index + 1}
                 </div>
-                {index < steps.length - 1 ? (
+                {index < list.length - 1 ? (
                   <div
                     className={[
                       "mt-1 h-8 w-px",

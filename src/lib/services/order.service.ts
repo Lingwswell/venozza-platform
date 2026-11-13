@@ -557,6 +557,12 @@ export class OrderService {
       throw new AppError(openStatus.message, 409);
     }
 
+    // Entrega ou retirada na loja (retirada nao cobra entrega).
+    const orderType = input.order_type === "retirada" ? "retirada" : "entrega";
+    if (orderType === "retirada" && !settings.pickupEnabled) {
+      throw new AppError("Esta loja não está aceitando retirada no balcão.", 400);
+    }
+
     const paymentMethod = input.payment_method ?? input.paymentMethod ?? "pix";
     const allowedPayments = enabledPaymentMethods(settings).map((m) => m.key);
 
@@ -578,7 +584,8 @@ export class OrderService {
       );
     }
 
-    const freight_cents = computeDeliveryFeeCents(settings, subtotal_cents);
+    const freight_cents =
+      orderType === "retirada" ? 0 : computeDeliveryFeeCents(settings, subtotal_cents);
 
     const total_cents = subtotal_cents + freight_cents;
 
@@ -588,6 +595,8 @@ export class OrderService {
 
     return OrderRepository.create({
       ...input,
+      order_type: orderType,
+      address: orderType === "retirada" ? input.address?.trim() || "Retirada na loja" : input.address,
       payment_method: paymentMethod,
       paymentMethod,
       items: normalizedItems,

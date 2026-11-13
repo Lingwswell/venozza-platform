@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchWithAuth } from "@/lib/auth/fetch-auth";
 import { isMultiStoreRole, normalizeRole } from "@/lib/auth/roles";
+import { printOrder } from "@/lib/kds/print";
 
 type KDSStatus =
   | "novo"
@@ -40,6 +41,13 @@ type Order = {
   customerName: string;
   status: KDSStatus;
   total_cents: number;
+  subtotal_cents?: number;
+  freight_cents?: number;
+  phone?: string | null;
+  address?: string | null;
+  notes?: string | null;
+  paymentMethod?: string | null;
+  orderType?: string | null;
   createdAt: string;
   storeId?: string;
   tenantId?: string;
@@ -91,6 +99,32 @@ const STATUS_META: Record<
     label: "Cancelado",
   },
 };
+
+// Retirada: depois de pronto, o cliente retira (nao passa por "saiu para entrega").
+function nextStep(order: { status: KDSStatus; orderType?: string | null }) {
+  if (order.status === "pronto" && order.orderType === "retirada") {
+    return { next: "finalizado" as KDSStatus, action: "Cliente retirou" };
+  }
+  const meta = STATUS_META[order.status];
+  return meta?.next ? { next: meta.next, action: meta.action || "" } : null;
+}
+
+function readFlag(key: string, fallback: boolean) {
+  try {
+    const v = localStorage.getItem(key);
+    return v === null ? fallback : v === "1";
+  } catch {
+    return fallback;
+  }
+}
+
+function saveFlag(key: string, value: boolean) {
+  try {
+    localStorage.setItem(key, value ? "1" : "0");
+  } catch {
+    // sem armazenamento: vale so nesta tela
+  }
+}
 
 function money(cents: number) {
   return (Number(cents || 0) / 100).toLocaleString("pt-BR", {
@@ -156,41 +190,87 @@ export default function KDSBoard({ mode = "admin" }: { mode?: "admin" | "store" 
   const [tvMode, setTvMode] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [newHighlightMap, setNewHighlightMap] = useState<Record<string, boolean>>({});
+  const [autoPrint, setAutoPrint] = useState(false);
+  const [audioBlocked, setAudioBlocked] = useState(false);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const knownOrderIdsRef = useRef<Set<string>>(new Set());
+  const autoPrintRef = useRef(false);
+  const printedRef = useRef<Set<string>>(new Set());
 
+  // Preferencias deste computador (som e impressao automatica).
+  useEffect(() => {
+    setSoundEnabled(readFlag("venozza_kds_sound", true));
+    const auto = readFlag("venozza_kds_autoprint", false);
+    setAutoPrint(auto);
+    autoPrintRef.current = auto;
+  }, []);
+
+  const getAudio = useCallback(() => {
+    const AudioCtx =
+      window.AudioContext ||
+      (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtx) return null;
+    if (!audioCtxRef.current) audioCtxRef.current = new AudioCtx();
+    return audioCtxRef.current;
+  }, []);
+
+  // Alarme de pedido novo: dois toques fortes.
   const playBeep = useCallback(() => {
     if (!soundEnabled) return;
 
     try {
-      const AudioCtx =
-        window.AudioContext ||
-        (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-
-      if (!AudioCtx) return;
-
-      if (!audioCtxRef.current) {
-        audioCtxRef.current = new AudioCtx();
+      const ctx = getAudio();
+      if (!ctx) return;
+      if (ctx.state === "suspended") {
+        // Navegador so libera som depois de um clique na tela.
+        setAudioBlocked(true);
+        ctx.resume().then(() => setAudioBlocked(ctx.state !== "running")).catch(() => undefined);
+        return;
       }
+      setAudioBlocked(false);
 
-      const ctx = audioCtxRef.current;
-      const oscillator = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      oscillator.type = "sine";
-      oscillator.frequency.value = 880;
-      gain.gain.value = 0.03;
-
-      oscillator.connect(gain);
-      gain.connect(ctx.destination);
-
-      oscillator.start();
-      oscillator.stop(ctx.currentTime + 0.15);
+      [0, 0.28].forEach((offset, i) => {
+        const oscillator = ctx.createOscillator();
+        const gain = ctx.createGain();
+        oscillator.type = "square";
+        oscillator.frequency.value = i === 0 ? 880 : 1175;
+        const start = ctx.currentTime + offset;
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.25, start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.22);
+        oscillator.connect(gain);
+        gain.connect(ctx.destination);
+        oscillator.start(start);
+        oscillator.stop(start + 0.24);
+      });
     } catch {
       // ignora falha de áudio no navegador
     }
-  }, [soundEnabled]);
+  }, [soundEnabled, getAudio]);
+
+  function unlockAudio() {
+    const ctx = getAudio();
+    ctx?.resume().then(() => {
+      setAudioBlocked(false);
+      playBeep();
+    }).catch(() => undefined);
+  }
+
+  function toggleSound() {
+    setSoundEnabled((v) => {
+      saveFlag("venozza_kds_sound", !v);
+      return !v;
+    });
+  }
+
+  function toggleAutoPrint() {
+    setAutoPrint((v) => {
+      saveFlag("venozza_kds_autoprint", !v);
+      autoPrintRef.current = !v;
+      return !v;
+    });
+  }
 
   const loadStores = useCallback(async () => {
     const res = await fetchWithAuth("/api/admin/stores");
@@ -231,6 +311,16 @@ export default function KDSBoard({ mode = "admin" }: { mode?: "admin" | "store" 
 
       if (previousIds.size > 0 && newOrders.length > 0) {
         playBeep();
+
+        // Impressao automatica so dos pedidos que acabaram de chegar (uma vez cada).
+        if (autoPrintRef.current) {
+          newOrders
+            .filter((o) => o.status === "novo" && !printedRef.current.has(o.id))
+            .forEach((o, index) => {
+              printedRef.current.add(o.id);
+              window.setTimeout(() => printOrder(o), index * 1500);
+            });
+        }
 
         setNewHighlightMap((prev) => {
           const next = { ...prev };
@@ -321,7 +411,7 @@ export default function KDSBoard({ mode = "admin" }: { mode?: "admin" | "store" 
   }, [loadOrders, role]);
 
   async function advance(order: Order) {
-    const nextStatus = STATUS_META[order.status]?.next;
+    const nextStatus = nextStep(order)?.next;
     if (!nextStatus) return;
 
     const previousOrders = orders;
@@ -385,6 +475,13 @@ export default function KDSBoard({ mode = "admin" }: { mode?: "admin" | "store" 
 
     return { total, novo, preparo, pronto, saiu };
   }, [orders, grouped]);
+
+  // Enquanto houver pedido novo esperando, o alarme toca a cada 5 segundos.
+  useEffect(() => {
+    if (!soundEnabled || stats.novo === 0) return;
+    const timer = window.setInterval(playBeep, 5000);
+    return () => window.clearInterval(timer);
+  }, [soundEnabled, stats.novo, playBeep]);
 
   return (
     <div className={tvMode ? "space-y-6" : "space-y-5"}>
@@ -466,10 +563,19 @@ export default function KDSBoard({ mode = "admin" }: { mode?: "admin" | "store" 
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
-            onClick={() => setSoundEnabled((v) => !v)}
+            onClick={toggleSound}
             className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white hover:bg-white/10"
           >
             {soundEnabled ? "🔔 Som ligado" : "🔕 Som desligado"}
+          </button>
+
+          <button
+            type="button"
+            onClick={toggleAutoPrint}
+            title="Imprime cada pedido novo assim que ele chega (neste computador)"
+            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white hover:bg-white/10"
+          >
+            {autoPrint ? "🖨️ Impressão automática ligada" : "🖨️ Impressão automática desligada"}
           </button>
 
           <button
@@ -493,6 +599,16 @@ export default function KDSBoard({ mode = "admin" }: { mode?: "admin" | "store" 
           </button>
         </div>
       </div>
+
+      {soundEnabled && audioBlocked ? (
+        <button
+          type="button"
+          onClick={unlockAudio}
+          className="w-full rounded-2xl border border-amber-400/40 bg-amber-400/15 p-4 text-left text-sm font-semibold text-amber-100 hover:bg-amber-400/25"
+        >
+          🔊 O navegador bloqueou o som. Clique aqui uma vez para ativar o alarme de pedidos novos.
+        </button>
+      ) : null}
 
       {error ? (
         <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
@@ -538,6 +654,16 @@ export default function KDSBoard({ mode = "admin" }: { mode?: "admin" | "store" 
                         <div className={tvMode ? "text-base text-neutral-300" : "text-sm text-neutral-400"}>
                           {order.customerName || "Sem nome"}
                         </div>
+                        <span
+                          className={[
+                            "mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-bold",
+                            order.orderType === "retirada"
+                              ? "bg-violet-500/20 text-violet-200"
+                              : "bg-sky-500/15 text-sky-200",
+                          ].join(" ")}
+                        >
+                          {order.orderType === "retirada" ? "🏪 Retirada na loja" : "🛵 Entrega"}
+                        </span>
                       </div>
 
                       <div
@@ -618,6 +744,12 @@ export default function KDSBoard({ mode = "admin" }: { mode?: "admin" | "store" 
                       </div>
                     ) : null}
 
+                    {order.notes ? (
+                      <div className="mb-3 rounded-xl border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-xs font-semibold text-orange-100">
+                        Obs do cliente: {order.notes}
+                      </div>
+                    ) : null}
+
                     <div className="grid grid-cols-2 gap-2 text-sm text-neutral-300">
                       <div className="rounded-xl bg-white/5 px-3 py-2">
                         <div className="text-[11px] uppercase tracking-wide text-neutral-500">Total</div>
@@ -642,18 +774,29 @@ export default function KDSBoard({ mode = "admin" }: { mode?: "admin" | "store" 
                       </span>
                     </div>
 
-                    {STATUS_META[order.status]?.next ? (
+                    <div className="mt-4 flex gap-2">
                       <button
                         type="button"
-                        onClick={() => advance(order) }
-                        disabled={busyOrderCode === order.orderCode}
-                        className="mt-4 w-full rounded-xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={() => printOrder(order)}
+                        className="rounded-xl border border-white/15 bg-white/5 px-3 py-3 text-sm font-semibold text-white hover:bg-white/10"
+                        aria-label={`Imprimir pedido ${order.orderCode}`}
+                        title="Imprimir"
                       >
-                        {busyOrderCode === order.orderCode
-                          ? "Atualizando..."
-                          : STATUS_META[order.status].action}
+                        🖨️
                       </button>
-                    ) : null}
+                      {nextStep(order) ? (
+                        <button
+                          type="button"
+                          onClick={() => advance(order) }
+                          disabled={busyOrderCode === order.orderCode}
+                          className="flex-1 rounded-xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {busyOrderCode === order.orderCode
+                            ? "Atualizando..."
+                            : nextStep(order)!.action}
+                        </button>
+                      ) : null}
+                    </div>
                   </article>
                 );
               }) }

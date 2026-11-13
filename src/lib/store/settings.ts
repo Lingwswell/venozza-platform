@@ -21,6 +21,7 @@ type StoreSettingsRow = {
   paymentCash: boolean;
   paymentCredit: boolean;
   paymentDebit: boolean;
+  pickupEnabled?: boolean | null;
 };
 
 export function toSettingsData(row: StoreSettingsRow | null): StoreSettingsData {
@@ -41,6 +42,7 @@ export function toSettingsData(row: StoreSettingsRow | null): StoreSettingsData 
     paymentCash: row.paymentCash,
     paymentCredit: row.paymentCredit,
     paymentDebit: row.paymentDebit,
+    pickupEnabled: row.pickupEnabled !== false,
   };
 }
 
@@ -79,6 +81,7 @@ export function parseSettingsPatch(
   const data: Prisma.StoreSettingsUncheckedUpdateInput = {};
 
   if ("manualClosed" in body) data.manualClosed = body.manualClosed === true;
+  if ("pickupEnabled" in body) data.pickupEnabled = body.pickupEnabled !== false;
   if ("closedMessage" in body) data.closedMessage = readText(body.closedMessage, 200);
   if ("whatsapp" in body) {
     const digits = String(body.whatsapp ?? "").replace(/\D/g, "");

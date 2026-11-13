@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { tenantHasFeature } from "@/lib/billing/features";
 import {
   computeConsumption,
   isBelowMin,
@@ -165,6 +166,8 @@ export async function applyOrderConsumption(orderId: string) {
     },
   });
   if (!order) return;
+  // Estoque vendido como adicional: sem contratar, nao da baixa.
+  if (!(await tenantHasFeature(order.tenantId, "estoque"))) return;
 
   const book = await loadRecipeBook(order.tenantId);
   if (book.products.size === 0 && book.options.every((o) => o.recipe.length === 0)) return;

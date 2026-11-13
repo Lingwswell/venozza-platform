@@ -36,6 +36,7 @@ model Tenant {
 
   plan     Plan?     @relation(fields: [planId], references: [id], onDelete: SetNull)
   invoices Invoice[]
+  addons   TenantAddon[]
 
   stores       Store[]
   users        User[]
@@ -233,6 +234,8 @@ model StoreSettings {
   paymentCash            Boolean  @default(true)
   paymentCredit          Boolean  @default(false)
   paymentDebit           Boolean  @default(false)
+  // Cliente pode escolher retirar na loja.
+  pickupEnabled          Boolean  @default(true)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
@@ -390,6 +393,8 @@ model Order {
   freight_cents  Int
   total_cents    Int
   paymentMethod  String
+  // entrega | retirada
+  orderType      String   @default("entrega")
   status         String   @default("novo")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -565,7 +570,9 @@ model Plan {
   // Valor mensal por loja ativa, em centavos.
   priceCents  Int
   trialDays   Int      @default(14)
+  // Sem preco de loja extra: limite de lojas. Com preco de loja extra: lojas incluidas no valor do plano.
   maxStores   Int?
+  extraStorePriceCents Int?
   active      Boolean  @default(true)
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
@@ -589,6 +596,8 @@ model Invoice {
   invoiceUrl  String?
   billingType String?
   description String?
+  // subscription (mensalidade) | one_off (cobranca unica: implantacao, servico)
+  kind        String    @default("subscription")
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -605,4 +614,36 @@ model BillingEvent {
   createdAt DateTime @default(now())
 
   @@map("billing_events")
+}
+
+// Recursos avulsos com valor mensal (somam na mensalidade da rede).
+// feature: recurso que so aparece para quem contratou (estoque, promocoes). Vazio = so cobranca.
+model Addon {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  priceCents  Int
+  feature     String?
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenants TenantAddon[]
+
+  @@map("addons")
+}
+
+model TenantAddon {
+  id        String   @id @default(cuid())
+  tenantId  String
+  addonId   String
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  addon  Addon  @relation(fields: [addonId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, addonId])
+  @@map("tenant_addons")
 }

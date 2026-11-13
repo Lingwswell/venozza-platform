@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getAdminScope, scopeErrorResponse } from "@/lib/auth/scope";
 import { assertPlatformAdmin, graceDays, tenantSiteUrl } from "@/lib/billing/server";
-import { billingState, monthlyValueCents } from "@/lib/billing/state";
+import { billingState, monthlyBreakdown } from "@/lib/billing/state";
 import { asaasConfigured } from "@/lib/billing/asaas";
 import { NetworkInputError, createNetwork } from "@/lib/billing/network";
 
@@ -13,7 +13,7 @@ export async function GET(req: Request) {
     assertPlatformAdmin(scope);
 
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const [tenants, plans, orders] = await Promise.all([
+    const [tenants, plans, orders, addons] = await Promise.all([
       prisma.tenant.findMany({
         orderBy: { createdAt: "asc" },
         select: {
@@ -29,7 +29,8 @@ export async function GET(req: Request) {
           billingEmail: true,
           createdAt: true,
           onboardedAt: true,
-          plan: { select: { id: true, name: true, priceCents: true } },
+          plan: { select: { id: true, name: true, priceCents: true, maxStores: true, extraStorePriceCents: true } },
+          addons: { select: { addonId: true, addon: { select: { priceCents: true, active: true } } } },
           domains: { select: { host: true } },
           stores: { where: { active: true }, select: { id: true } },
           users: { where: { role: "owner", active: true }, select: { name: true, email: true }, take: 1 },
@@ -47,7 +48,15 @@ export async function GET(req: Request) {
         _sum: { subtotal_cents: true },
         _count: { _all: true },
       }),
+      prisma.addon.findMany({ orderBy: { sortOrder: "asc" } }),
     ]);
+
+    // Faturas em aberto de cada rede (para dar baixa manual).
+    const openInvoices = await prisma.invoice.findMany({
+      where: { tenantId: { in: tenants.map((t) => t.id) }, status: { in: ["pending", "overdue"] } },
+      orderBy: { dueDate: "asc" },
+      select: { id: true, tenantId: true, amountCents: true, status: true, dueDate: true, description: true, kind: true, invoiceUrl: true },
+    });
 
     const ordersBy = new Map(orders.map((o) => [o.tenantId, o] as const));
     const grace = graceDays();
@@ -56,8 +65,10 @@ export async function GET(req: Request) {
       ok: true,
       asaas: asaasConfigured(),
       plans,
+      addons,
       tenants: tenants.map((t) => {
         const o = ordersBy.get(t.id);
+        const addonsCents = t.addons.reduce((sum, a) => sum + (a.addon.active ? a.addon.priceCents : 0), 0);
         return {
           id: t.id,
           name: t.name,
@@ -72,7 +83,9 @@ export async function GET(req: Request) {
           onboarded: Boolean(t.onboardedAt),
           plan: t.plan,
           stores: t.stores.length,
-          monthlyCents: t.plan ? monthlyValueCents(t.plan.priceCents, t.stores.length) : null,
+          monthlyCents: t.plan ? monthlyBreakdown(t.plan, t.stores.length, addonsCents).totalCents : null,
+          addonIds: t.addons.map((a) => a.addonId),
+          openInvoices: openInvoices.filter((i) => i.tenantId === t.id),
           owner: t.users[0] ?? null,
           domains: t.domains.map((d) => d.host),
           siteUrl: tenantSiteUrl(t.slug, t.domains.map((d) => d.host)),
